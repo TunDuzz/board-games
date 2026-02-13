@@ -1,7 +1,7 @@
 const express = require("express");
 const { sequelize } = require("./src/models");
-
-const app = express();
+const appPath = require.resolve("./src/app");
+const app = require(appPath);
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -9,7 +9,11 @@ app.get("/", (req, res) => {
 });
 
 sequelize.authenticate()
-  .then(() => console.log("DB Connected "))
+  .then(() => {
+    console.log("DB Connected ");
+    return sequelize.sync();
+  })
+  .then(() => console.log("DB Synced "))
   .catch(err => console.error("DB Error ", err));
 
 const PORT = process.env.PORT || 5000;
