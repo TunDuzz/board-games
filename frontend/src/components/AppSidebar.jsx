@@ -85,13 +85,16 @@ export function AppSidebar() {
                 {(user.full_name || user.username).slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user.full_name || user.username}</p>
-              <p className="text-xs text-muted-foreground">{user.rank}</p>
-            </div>
-            <NavLink to="/" className="text-muted-foreground hover:text-foreground">
+            <button
+              onClick={() => {
+                authService.logout();
+                window.location.href = "/";
+              }}
+              className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              title="Đăng xuất"
+            >
               <LogOut className="h-4 w-4" />
-            </NavLink>
+            </button>
           </div>
         ) : null}
       </SidebarFooter>

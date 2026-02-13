@@ -22,8 +22,10 @@ const Profile = () => {
   const { toast } = useToast();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
-  const [nickname, setNickname] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editAvatar, setEditAvatar] = useState("");
+  const [nickname, setNickname] = useState(""); // Keeping this for the input field, will be updated from editName
   const [changingPass, setChangingPass] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [passwords, setPasswords] = useState({
@@ -133,7 +135,7 @@ const Profile = () => {
     );
   }
 
-  const stats = user.UserStat || { total_matches: 0, wins: 0, losses: 0, draws: 0 };
+  const stats = user.UserStats || { total_matches: 0, wins: 0, losses: 0, draws: 0 };
 
   return (
     <AppLayout>

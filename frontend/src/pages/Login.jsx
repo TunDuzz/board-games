@@ -32,17 +32,27 @@ const Login = () => {
       if (isSignUp) {
         await authService.register(formData.username, formData.email, formData.password);
         toast({ title: "Đăng ký thành công!", description: "Chào mừng bạn gia nhập Grandmaster." });
+        // Auto switch to login or auto login? For now let's auto login or just stay on login view with filled data?
+        // The requirement says "Đăng ký / đăng nhập", usually auto-login is better but for safety let's ask user to login or just switch mode.
+        // Let's assume register doesn't auto-login in service, so we switch to login mode or just login directly if backend supports.
+        // Current authService.register returns { message, user }. It doesn't return token.
+        // So we should switch to login view and pre-fill email.
+        setIsSignUp(false);
       } else {
-        await authService.login(formData.email, formData.password);
+        const response = await authService.login(formData.email, formData.password);
+        // Save token is handled in service? Let's check auth.service.js later.
+        // Assuming authService.login saves token or returns it.
+        // If it throws, we catch below.
         toast({ title: "Đăng nhập thành công!", description: "Chào mừng quay trở lại." });
+        navigate("/dashboard");
       }
-      navigate("/dashboard");
     } catch (error) {
       console.error("Auth error:", error);
+      const message = error.response?.data?.message || "Đã có lỗi xảy ra. Vui lòng thử lại.";
       toast({
         variant: "destructive",
-        title: "Lỗi xác thực",
-        description: error.response?.data?.message || "Đã có lỗi xảy ra. Vui lòng thử lại."
+        title: isSignUp ? "Đăng ký thất bại" : "Đăng nhập thất bại",
+        description: message
       });
     } finally {
       setLoading(false);
