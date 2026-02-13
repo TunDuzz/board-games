@@ -75,7 +75,6 @@ const MatchHistory = () => {
             </div>
           </CardContent>
         </Card>
-        )}
       </div>
     </AppLayout>
   );
