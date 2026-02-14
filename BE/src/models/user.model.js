@@ -11,8 +11,6 @@ const User = sequelize.define(
     full_name: DataTypes.STRING(100),
     birth_year: DataTypes.INTEGER,
     avatar_url: { type: DataTypes.STRING(255), defaultValue: "/default-avatar.png" },
-    rank: { type: DataTypes.STRING(20), defaultValue: "Bronze" },
-    elo: { type: DataTypes.INTEGER, defaultValue: 1000 },
     is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
   },
   {
