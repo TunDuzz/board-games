@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.routes");
+const friendRoutes = require("./routes/friend.routes");
+const gameInviteRoutes = require("./routes/gameInvite.routes");
 
 console.log("Loading src/app.js from:", __filename);
 
@@ -19,6 +21,9 @@ app.use((req, res, next) => {
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/friends", friendRoutes);
+app.use("/api/invites", gameInviteRoutes);
+
 
 // Test route
 app.get("/", (req, res) => {
