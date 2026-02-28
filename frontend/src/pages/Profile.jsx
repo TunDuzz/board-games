@@ -27,6 +27,7 @@ const Profile = () => {
   const [editAvatar, setEditAvatar] = useState("");
   const [nickname, setNickname] = useState(""); // Keeping this for the input field, will be updated from editName
   const [changingPass, setChangingPass] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [passwords, setPasswords] = useState({
     current: "",

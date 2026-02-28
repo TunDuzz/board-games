@@ -68,9 +68,7 @@ const getRankings = async (req, res) => {
             include: [
                 {
                     model: UserStats,
-                    attributes: ["matches_played", "wins", "win_rate"] // Assuming these exist or can be calculated. 
-                    // Wait, checking userStats.model.js again: total_matches, wins, losses, draws. 
-                    // win_rate is not a column. I should probably just return total_matches and wins.
+                    attributes: ["total_matches", "wins"]
                 }
             ],
             order: [["elo", "DESC"]],

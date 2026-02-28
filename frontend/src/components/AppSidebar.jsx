@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { userService } from "@/services/user.service";
+import { authService } from "@/services/auth.service";
 import { useState, useEffect } from "react";
 
 const navItems = [
