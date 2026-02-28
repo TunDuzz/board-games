@@ -23,6 +23,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/invites", gameInviteRoutes);
+app.use("/api/rooms", require("./routes/room.routes"));
+app.use("/api/matchmaking", require("./routes/matchmaking.routes"));
 
 
 // Test route
