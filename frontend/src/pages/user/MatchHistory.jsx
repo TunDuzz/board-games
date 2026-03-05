@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AppLayout } from "@/components/AppLayout";
 import { userService } from "@/services/user.service";
 import { gameTypeLabels } from "@/data/mock";
 import { Loader2 } from "lucide-react";
@@ -32,14 +31,12 @@ const MatchHistory = () => {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex justify-center p-8"><span className="animate-spin">⌛</span></div>
-      </AppLayout>
+      <div className="flex justify-center p-8"><span className="animate-spin">⌛</span></div>
     )
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="mx-auto max-w-3xl space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Match History</h1>
 
@@ -76,7 +73,7 @@ const MatchHistory = () => {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
+    </>
   );
 };
 

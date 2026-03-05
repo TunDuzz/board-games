@@ -16,25 +16,58 @@ const ChessPieceImage = ({ type, color, size }) => {
 };
 
 export const GameBoard = ({
-    gameType = 'gomoku',
+    gameType = 'caro',
     boardState = [],
     selectedSquare = null,
     validMoves = [],
     onSquareClick
 }) => {
+    const [containerSize, setContainerSize] = useState({ width: 800, height: 800 });
+    const containerRef = React.useRef(null);
+
+    useEffect(() => {
+        const updateSize = () => {
+            if (containerRef.current) {
+                const { clientWidth, clientHeight } = containerRef.current;
+                // Leave some room for margins/padding
+                setContainerSize({
+                    width: clientWidth - 40,
+                    height: clientHeight - 40
+                });
+            }
+        };
+
+        updateSize();
+        window.addEventListener('resize', updateSize);
+        return () => window.removeEventListener('resize', updateSize);
+    }, []);
+
     // 1. Cấu hình kích thước và cơ chế lưới theo từng loại cờ
     const config = useMemo(() => {
+        const baseRows = gameType === 'xiangqi' ? 10 : (gameType === 'chess' ? 8 : 15);
+        const baseCols = gameType === 'xiangqi' ? 9 : (gameType === 'chess' ? 8 : 15);
+
+        // Calculate adaptive cellSize
+        const paddingValue = gameType === 'chess' ? 0 : (gameType === 'caro' ? 30 : 35);
+        const availableW = containerSize.width - paddingValue * 2;
+        const availableH = containerSize.height - paddingValue * 2;
+
+        const cellW = availableW / (gameType === 'caro' || gameType === 'xiangqi' ? baseCols - 1 : baseCols);
+        const cellH = availableH / (gameType === 'caro' || gameType === 'xiangqi' ? baseRows - 1 : baseRows);
+
+        // We want a square cell, and we want it to fit in both directions
+        const calculatedCellSize = Math.floor(Math.min(cellW, cellH, gameType === 'caro' ? 45 : 80));
+
         switch (gameType) {
             case 'xiangqi':
-                return { rows: 10, cols: 9, isIntersectionBased: true, bg: '#D46231', cellSize: 70, padding: 35 };
+                return { rows: 10, cols: 9, isIntersectionBased: true, bg: '#D46231', cellSize: calculatedCellSize, padding: calculatedCellSize / 2 };
             case 'chess':
-                // Cờ Vua: Màu y gốc Chess.com, không viền (padding: 0)
-                return { rows: 8, cols: 8, isIntersectionBased: false, bg: '#333', cellSize: 80, padding: 0, light: '#ebecd0', dark: '#779556' };
-            case 'gomoku':
+                return { rows: 8, cols: 8, isIntersectionBased: false, bg: '#333', cellSize: calculatedCellSize, padding: 0, light: '#ebecd0', dark: '#779556' };
+            case 'caro':
             default:
-                return { rows: 15, cols: 15, isIntersectionBased: true, bg: '#E1C699', cellSize: 45, padding: 30 };
+                return { rows: 15, cols: 15, isIntersectionBased: true, bg: '#E1C699', cellSize: calculatedCellSize, padding: calculatedCellSize * 0.6 };
         }
-    }, [gameType]);
+    }, [gameType, containerSize]);
 
     const { rows, cols, isIntersectionBased, bg, cellSize, padding, light, dark } = config;
 
@@ -73,7 +106,7 @@ export const GameBoard = ({
     };
 
     // 3. UI Lưới Cờ Caro (Gomoku)
-    const renderGomokuGrid = () => {
+    const renderCaroGrid = () => {
         const lines = [];
         for (let c = 0; c < cols; c++) {
             lines.push(
@@ -208,7 +241,7 @@ export const GameBoard = ({
     };
 
     const renderSinglePiece = (type, piece) => {
-        if (type === 'gomoku') {
+        if (type === 'caro') {
             const isBlack = (piece === 'black' || piece?.color === 'black');
             return (
                 <Circle
@@ -271,14 +304,14 @@ export const GameBoard = ({
     };
 
     return (
-        <div className="flex justify-center items-center w-full overflow-auto">
+        <div ref={containerRef} className="flex justify-center items-center w-full h-full min-h-0 overflow-hidden">
             <Stage width={stageWidth} height={stageHeight} onMouseDown={handleCanvasClick} onTouchStart={handleCanvasClick}>
                 <Layer>
                     <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill={bg} shadowColor="#000" shadowBlur={10} shadowOpacity={0.3} cornerRadius={8} />
                 </Layer>
 
                 <Layer x={padding} y={padding}>
-                    {gameType === 'gomoku' && renderGomokuGrid()}
+                    {gameType === 'caro' && renderCaroGrid()}
                     {gameType === 'xiangqi' && renderXiangqiGrid()}
                     {gameType === 'chess' && renderChessGrid()}
 

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AppLayout } from "@/components/AppLayout";
 import { PlayerInfoBar } from "@/components/PlayerInfoBar";
 import { GameBoard } from "@/components/GameBoard";
 
@@ -116,14 +115,16 @@ const XiangqiGame = () => {
   }
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-5xl">
-        <div className="flex flex-col gap-6 lg:flex-row">
+    <>
+      <div className="h-full flex flex-col p-4">
+        <div className="flex-1 flex flex-col gap-4 lg:flex-row min-h-0">
           {/* Board Area */}
-          <div className="flex-1 space-y-3">
-            <PlayerInfoBar name="Black Tiger" rating={1950} timer="15:00" />
+          <div className="flex-1 flex flex-col gap-2 min-h-0">
+            <div className="shrink-0">
+              <PlayerInfoBar name="Black Tiger" rating={1950} timer="15:00" />
+            </div>
 
-            <div className="w-full flex justify-center">
+            <div className="flex-1 min-h-0 relative">
               <GameBoard
                 gameType="xiangqi"
                 boardState={board}
@@ -133,7 +134,9 @@ const XiangqiGame = () => {
               />
             </div>
 
-            <PlayerInfoBar name="Red Dragon" rating={2100} timer="15:00" />
+            <div className="shrink-0">
+              <PlayerInfoBar name="Red Dragon" rating={2100} timer="15:00" />
+            </div>
           </div>
 
           {/* Side Panel */}
@@ -179,7 +182,7 @@ const XiangqiGame = () => {
           </div>
         </div>
       </div>
-    </AppLayout>
+    </>
   );
 };
 

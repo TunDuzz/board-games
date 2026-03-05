@@ -2,7 +2,6 @@ import { useNavigate } from "react-router-dom";
 import { Crown, CircleDot, Grid3X3, TrendingUp, Trophy, Gamepad2, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AppLayout } from "@/components/AppLayout";
 import { userService } from "@/services/user.service";
 import { gameTypeLabels } from "@/data/mock";
 import { useState, useEffect } from "react";
@@ -23,11 +22,11 @@ const gameCards = [
     url: "/game/xiangqi",
   },
   {
-    type: "gomoku",
-    title: "Gomoku",
+    type: "caro",
+    title: "Caro",
     description: "Get five in a row on a 15×15 grid. Simple yet deep.",
     icon: Grid3X3,
-    url: "/game/gomoku",
+    url: "/game/caro",
   },
 ];
 
@@ -63,19 +62,15 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex h-[400px] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </AppLayout>
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (!user) {
     return (
-      <AppLayout>
-        <div className="text-center py-10">Không tìm thấy thông tin người dùng.</div>
-      </AppLayout>
+      <div className="text-center py-10">Không tìm thấy thông tin người dùng.</div>
     );
   }
 
@@ -85,7 +80,7 @@ const Dashboard = () => {
     : 0;
 
   return (
-    <AppLayout>
+    <>
       <div className="mx-auto max-w-5xl space-y-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Welcome back, {user.full_name || user.username}</h1>
@@ -182,7 +177,7 @@ const Dashboard = () => {
           </Card>
         </div>
       </div>
-    </AppLayout>
+    </>
   );
 };
 

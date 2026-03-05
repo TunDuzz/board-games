@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AppLayout } from "@/components/AppLayout";
 import { PlayerInfoBar } from "@/components/PlayerInfoBar";
 import { GameBoard } from "@/components/GameBoard";
 
-const GomokuGame = () => {
+const CaroGame = () => {
   const [board, setBoard] = useState(Array(15).fill(null).map(() => Array(15).fill(null)));
   const [isBlackTurn, setIsBlackTurn] = useState(true);
   const [moves, setMoves] = useState([]);
@@ -36,18 +35,22 @@ const GomokuGame = () => {
   }
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-5xl">
-        <div className="flex flex-col gap-6 lg:flex-row">
+    <>
+      <div className="h-full flex flex-col p-4">
+        <div className="flex-1 flex flex-col gap-4 lg:flex-row min-h-0">
           {/* Board Area */}
-          <div className="flex-1 space-y-3">
-            <PlayerInfoBar name="Black Shadow" rating={1800} timer="10:00" />
-
-            <div className="w-full flex justify-center">
-              <GameBoard gameType="gomoku" boardState={board} onSquareClick={handleSquareClick} />
+          <div className="flex-1 flex flex-col gap-2 min-h-0">
+            <div className="shrink-0">
+              <PlayerInfoBar name="Black Shadow" rating={1800} timer="10:00" />
             </div>
 
-            <PlayerInfoBar name="White Lotus" rating={1750} timer="10:00" />
+            <div className="flex-1 min-h-0 relative">
+              <GameBoard gameType="caro" boardState={board} onSquareClick={handleSquareClick} />
+            </div>
+
+            <div className="shrink-0">
+              <PlayerInfoBar name="White Lotus" rating={1750} timer="10:00" />
+            </div>
           </div>
 
           {/* Side Panel */}
@@ -93,8 +96,8 @@ const GomokuGame = () => {
           </div>
         </div>
       </div>
-    </AppLayout>
+    </>
   );
 };
 
-export default GomokuGame;
+export default CaroGame;

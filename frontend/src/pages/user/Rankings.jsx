@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AppLayout } from "@/components/AppLayout";
 import { userService } from "@/services/user.service";
 import { Loader2, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getRankFromElo, getRankColor } from "@/utils/rank";
 
 const Rankings = () => {
   const [rankings, setRankings] = useState([]);
@@ -25,7 +25,7 @@ const Rankings = () => {
   }, []);
 
   return (
-    <AppLayout>
+    <>
       <div className="mx-auto max-w-3xl space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Global Rankings</h1>
 
@@ -52,8 +52,8 @@ const Rankings = () => {
                       <TableCell className="font-medium">
                         {index + 1 <= 3 ? (
                           <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${index + 1 === 1 ? "bg-amber-100 text-amber-700"
-                              : index + 1 === 2 ? "bg-gray-100 text-gray-600"
-                                : "bg-orange-100 text-orange-700"
+                            : index + 1 === 2 ? "bg-gray-100 text-gray-600"
+                              : "bg-orange-100 text-orange-700"
                             }`}>
                             {index + 1}
                           </span>
@@ -71,7 +71,9 @@ const Rankings = () => {
                           </Avatar>
                           <div>
                             <p className="font-medium text-sm">{player.displayName}</p>
-                            <p className="text-xs text-muted-foreground">{player.rankTitle}</p>
+                            <p className={`text-xs px-1.5 py-0.5 rounded-md inline-block mt-0.5 font-medium ${getRankColor(getRankFromElo(player.elo))}`}>
+                              {getRankFromElo(player.elo)}
+                            </p>
                           </div>
                         </div>
                       </TableCell>
@@ -93,7 +95,7 @@ const Rankings = () => {
           </Card>
         )}
       </div>
-    </AppLayout>
+    </>
   );
 };
 

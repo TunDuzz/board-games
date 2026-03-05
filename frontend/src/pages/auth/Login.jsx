@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Gamepad2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
-    username: "",
     email: "",
     password: ""
   });
@@ -29,29 +27,15 @@ const Login = () => {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        await authService.register(formData.username, formData.email, formData.password);
-        toast({ title: "Đăng ký thành công!", description: "Chào mừng bạn gia nhập Grandmaster." });
-        // Auto switch to login or auto login? For now let's auto login or just stay on login view with filled data?
-        // The requirement says "Đăng ký / đăng nhập", usually auto-login is better but for safety let's ask user to login or just switch mode.
-        // Let's assume register doesn't auto-login in service, so we switch to login mode or just login directly if backend supports.
-        // Current authService.register returns { message, user }. It doesn't return token.
-        // So we should switch to login view and pre-fill email.
-        setIsSignUp(false);
-      } else {
-        const response = await authService.login(formData.email, formData.password);
-        // Save token is handled in service? Let's check auth.service.js later.
-        // Assuming authService.login saves token or returns it.
-        // If it throws, we catch below.
-        toast({ title: "Đăng nhập thành công!", description: "Chào mừng quay trở lại." });
-        navigate("/dashboard");
-      }
+      await authService.login(formData.email, formData.password);
+      toast({ title: "Đăng nhập thành công!", description: "Chào mừng quay trở lại." });
+      navigate("/dashboard");
     } catch (error) {
-      console.error("Auth error:", error);
+      console.error("Login error:", error);
       const message = error.response?.data?.message || "Đã có lỗi xảy ra. Vui lòng thử lại.";
       toast({
         variant: "destructive",
-        title: isSignUp ? "Đăng ký thất bại" : "Đăng nhập thất bại",
+        title: "Đăng nhập thất bại",
         description: message
       });
     } finally {
@@ -66,33 +50,21 @@ const Login = () => {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
             <Gamepad2 className="h-7 w-7 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Grandmaster Hybrid</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Board Game</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Chess · Xiangqi · Gomoku
+            Chess · Xiangqi · Caro
           </p>
         </div>
 
         <Card>
           <form onSubmit={handleSubmit}>
             <CardHeader className="pb-4">
-              <CardTitle className="text-lg">{isSignUp ? "Create account" : "Welcome back"}</CardTitle>
+              <CardTitle className="text-lg">Welcome back</CardTitle>
               <CardDescription>
-                {isSignUp ? "Enter your details to get started" : "Sign in to continue playing"}
+                Sign in to continue playing
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {isSignUp && (
-                <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    placeholder="GrandMaster99"
-                    value={formData.username}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -119,16 +91,14 @@ const Login = () => {
             <CardFooter className="flex flex-col gap-3">
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isSignUp ? "Sign Up" : "Sign In"}
+                Sign In
               </Button>
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
+              <Link
+                to="/register"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                disabled={loading}
               >
-                {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
-              </button>
+                Don't have an account? Sign up
+              </Link>
             </CardFooter>
           </form>
         </Card>
