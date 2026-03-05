@@ -3,16 +3,18 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import ChessGame from "./pages/ChessGame";
-import XiangqiGame from "./pages/XiangqiGame";
-import GomokuGame from "./pages/GomokuGame";
-import Profile from "./pages/Profile";
-import MatchHistory from "./pages/MatchHistory";
-import Rankings from "./pages/Rankings";
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
+import Dashboard from "./pages/dashboard/Dashboard";
+import ChessGame from "./pages/games/ChessGame";
+import XiangqiGame from "./pages/games/XiangqiGame";
+import CaroGame from "./pages/games/CaroGame";
+import Profile from "./pages/user/Profile";
+import MatchHistory from "./pages/user/MatchHistory";
+import Rankings from "./pages/user/Rankings";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { AppLayout } from "./components/AppLayout";
 
 const queryClient = new QueryClient();
 
@@ -24,16 +26,19 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/game/chess" element={<ProtectedRoute><ChessGame /></ProtectedRoute>} />
-          <Route path="/game/xiangqi" element={<ProtectedRoute><XiangqiGame /></ProtectedRoute>} />
-          <Route path="/game/gomoku" element={<ProtectedRoute><GomokuGame /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/history" element={<ProtectedRoute><MatchHistory /></ProtectedRoute>} />
-          <Route path="/rankings" element={<ProtectedRoute><Rankings /></ProtectedRoute>} />
+          <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/game/chess" element={<ChessGame />} />
+            <Route path="/game/xiangqi" element={<XiangqiGame />} />
+            <Route path="/game/caro" element={<CaroGame />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/history" element={<MatchHistory />} />
+            <Route path="/rankings" element={<Rankings />} />
+          </Route>
 
-          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

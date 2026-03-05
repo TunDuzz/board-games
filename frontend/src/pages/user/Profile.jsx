@@ -4,8 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { AppLayout } from "@/components/AppLayout";
 import { userService } from "@/services/user.service";
+import { getRankFromElo, getRankColor } from "@/utils/rank";
 import { Camera, Loader2, Save, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -120,26 +120,22 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex h-[400px] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </AppLayout>
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (!user) {
     return (
-      <AppLayout>
-        <div className="text-center py-10">Không tìm thấy thông tin người dùng.</div>
-      </AppLayout>
+      <div className="text-center py-10">Không tìm thấy thông tin người dùng.</div>
     );
   }
 
   const stats = user.UserStats || { total_matches: 0, wins: 0, losses: 0, draws: 0 };
 
   return (
-    <AppLayout>
+    <>
       <div className="mx-auto max-w-2xl space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Player Profile</h1>
 
@@ -185,7 +181,9 @@ const Profile = () => {
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-xs uppercase tracking-wider font-bold mb-1">Rank</span>
-                    <p className="font-semibold text-primary">{user.rank}</p>
+                    <span className={`px-2 py-1 rounded-md text-xs font-semibold ${getRankColor(getRankFromElo(user.elo))}`}>
+                      {getRankFromElo(user.elo)}
+                    </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-xs uppercase tracking-wider font-bold mb-1">Elo</span>
@@ -302,7 +300,7 @@ const Profile = () => {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
+    </>
   );
 };
 

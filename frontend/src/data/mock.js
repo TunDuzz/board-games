@@ -13,19 +13,19 @@ export const currentUser = {
   gameStats: {
     chess: { played: 102, wins: 68, losses: 34 },
     xiangqi: { played: 85, wins: 52, losses: 33 },
-    gomoku: { played: 60, wins: 41, losses: 19 },
+    caro: { played: 60, wins: 41, losses: 19 },
   },
 };
 
 export const recentMatches = [
   { id: "m1", gameType: "chess", opponent: "DragonKnight", result: "win", date: "2026-02-10", ratingChange: 12 },
-  { id: "m2", gameType: "gomoku", opponent: "StoneWall", result: "loss", date: "2026-02-09", ratingChange: -8 },
+  { id: "m2", gameType: "caro", opponent: "StoneWall", result: "loss", date: "2026-02-09", ratingChange: -8 },
   { id: "m3", gameType: "xiangqi", opponent: "RedGeneral", result: "win", date: "2026-02-09", ratingChange: 15 },
   { id: "m4", gameType: "chess", opponent: "KnightRider", result: "draw", date: "2026-02-08", ratingChange: 0 },
-  { id: "m5", gameType: "gomoku", opponent: "FiveInRow", result: "win", date: "2026-02-07", ratingChange: 10 },
+  { id: "m5", gameType: "caro", opponent: "FiveInRow", result: "win", date: "2026-02-07", ratingChange: 10 },
   { id: "m6", gameType: "xiangqi", opponent: "JadeCanon", result: "loss", date: "2026-02-06", ratingChange: -11 },
   { id: "m7", gameType: "chess", opponent: "BishopKing", result: "win", date: "2026-02-05", ratingChange: 9 },
-  { id: "m8", gameType: "gomoku", opponent: "BlackStone", result: "win", date: "2026-02-04", ratingChange: 14 },
+  { id: "m8", gameType: "caro", opponent: "BlackStone", result: "win", date: "2026-02-04", ratingChange: 14 },
   { id: "m9", gameType: "xiangqi", opponent: "ElephantEye", result: "win", date: "2026-02-03", ratingChange: 7 },
   { id: "m10", gameType: "chess", opponent: "QueenGambit", result: "loss", date: "2026-02-02", ratingChange: -13 },
 ];
@@ -57,7 +57,7 @@ export const rankings = {
     { rank: 9, name: "SoldierMarch", rating: 2100, gamesPlayed: 175 },
     { rank: 10, name: "PalaceGuard", rating: 2050, gamesPlayed: 160 },
   ],
-  gomoku: [
+  caro: [
     { rank: 1, name: "FiveInRow", rating: 2400, gamesPlayed: 280 },
     { rank: 2, name: "StoneWall", rating: 2350, gamesPlayed: 260 },
     { rank: 3, name: "BlackStone", rating: 2300, gamesPlayed: 240 },
@@ -119,5 +119,5 @@ export const chessMoveHistory = [
 export const gameTypeLabels = {
   chess: "Chess",
   xiangqi: "Xiangqi",
-  gomoku: "Gomoku",
+  caro: "Caro",
 };
