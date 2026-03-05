@@ -1,4 +1,4 @@
-const { User, Match, UserStats } = require("../models");
+const { User, Match, UserStats, UserGameStats } = require("../models");
 
 // Lấy thông tin cá nhân
 const getProfile = async (req, res) => {
@@ -6,13 +6,18 @@ const getProfile = async (req, res) => {
         const user = await User.findByPk(req.user.id, {
             attributes: { exclude: ["password_hash"] }, // Không trả về mật khẩu
             include: [
-                { model: UserStats }
+                { model: UserStats },
+                { model: UserGameStats, as: "gameStats" }
             ]
         });
 
         if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng!" });
 
-        res.json(user);
+        const userData = user.toJSON();
+        const elos = userData.gameStats ? userData.gameStats.map(s => s.elo) : [];
+        userData.elo = elos.length > 0 ? Math.max(...elos) : 1200;
+
+        res.json(userData);
     } catch (error) {
         res.status(500).json({ message: "Lỗi server!", error: error.message });
     }
@@ -64,36 +69,44 @@ const getMatchHistory = async (req, res) => {
 const getRankings = async (req, res) => {
     try {
         const users = await User.findAll({
-            attributes: ["username", "full_name", "avatar_url", "elo", "rank"],
+            attributes: ["username", "full_name", "avatar_url"],
             include: [
                 {
                     model: UserStats,
                     attributes: ["total_matches", "wins"]
+                },
+                {
+                    model: UserGameStats,
+                    as: "gameStats",
+                    attributes: ["elo"]
                 }
-            ],
-            order: [["elo", "DESC"]],
-            limit: 50
+            ]
         });
 
-        // Calculate win rate manually if needed or just return raw stats
         const rankings = users.map(user => {
             const stats = user.UserStats || { total_matches: 0, wins: 0 };
             const winRate = stats.total_matches > 0
                 ? Math.round((stats.wins / stats.total_matches) * 100) + "%"
                 : "0%";
 
+            const elos = user.gameStats ? user.gameStats.map(s => s.elo) : [];
+            const maxElo = elos.length > 0 ? Math.max(...elos) : 1200;
+
             return {
                 username: user.username,
                 displayName: user.full_name || user.username,
                 avatarUrl: user.avatar_url,
-                elo: user.elo,
-                rankTitle: user.rank,
+                elo: maxElo,
                 totalGames: stats.total_matches,
                 winRate: winRate
             };
         });
 
-        res.json(rankings);
+        // Sắp xếp theo elo giảm dần và lấy top 50
+        rankings.sort((a, b) => b.elo - a.elo);
+        const top50 = rankings.slice(0, 50);
+
+        res.json(top50);
     } catch (error) {
         res.status(500).json({ message: "Lỗi server!", error: error.message });
     }
