@@ -1,4 +1,4 @@
-const { User, Friend, GameInvite, Room, RoomPlayer } = require("../models");
+const { User, Friend, GameInvite, Room, RoomPlayer, GameType } = require("../models");
 const { Op } = require("sequelize");
 
 // Gửi lời mời chơi game
@@ -102,9 +102,12 @@ const acceptGameInvite = async (req, res) => {
         const userId = req.user.id;
         const inviteId = parseInt(req.params.inviteId);
 
-        // Tìm lời mời
+        // Tìm lời mời kèm theo Room và RoomPlayers hiện tại
         const invite = await GameInvite.findByPk(inviteId, {
-            include: [{ model: Room }]
+            include: [{ 
+                model: Room,
+                include: [{ model: RoomPlayer }]
+            }]
         });
 
         if (!invite) {
@@ -135,20 +138,31 @@ const acceptGameInvite = async (req, res) => {
             return res.status(400).json({ message: "Phòng chơi đã bắt đầu hoặc kết thúc!" });
         }
 
-        // Cập nhật trạng thái lời mời
-        invite.status = "accepted";
-        await invite.save();
+        // 1. Xác định role (player1 hoặc player2) cho người tham gia
+        const currentPlayers = invite.Room.RoomPlayers.filter(p => p.role.startsWith("player"));
+        
+        if (currentPlayers.length >= 2) {
+            return res.status(400).json({ message: "Phòng đã đủ người chơi!" });
+        }
 
-        // Thêm người chơi vào room
+        const newRole = currentPlayers.some(p => p.role === "player1") ? "player2" : "player1";
+
+        // 2. Thêm người chơi vào room TRƯỚC khi cập nhật trạng thái lời mời
+        // để hỗ trợ retry nếu chẳng may có crash Database
         const [roomPlayer, created] = await RoomPlayer.findOrCreate({
             where: {
                 room_id: invite.room_id,
                 user_id: userId
             },
             defaults: {
-                joined_at: new Date()
+                role: newRole,
+                is_ready: false
             }
         });
+
+        // 3. Cập nhật trạng thái lời mời THÀNH CÔNG
+        invite.status = "accepted";
+        await invite.save();
 
         res.json({
             message: "Đã chấp nhận lời mời! Bạn đã tham gia phòng chơi.",
@@ -253,7 +267,11 @@ const getReceivedInvites = async (req, res) => {
             },
             include: [
                 { model: User, as: "fromUser", attributes: ["user_id", "username", "full_name", "avatar_url"] },
-                { model: Room, attributes: ["room_id", "room_code", "status", "game_type_id"] }
+                { 
+                    model: Room, 
+                    attributes: ["room_id", "room_code", "status", "game_type_id"],
+                    include: [{ model: GameType, attributes: ["name"] }]
+                }
             ],
             order: [["created_at", "DESC"]]
         });

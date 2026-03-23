@@ -1,0 +1,26 @@
+Error
+    at Query.run (C:\Users\ACER\board-games\BE\node_modules\sequelize\lib\dialects\mysql\query.js:52:25)
+    at C:\Users\ACER\board-games\BE\node_modules\sequelize\lib\sequelize.js:315:28
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async MySQLQueryInterface.select (C:\Users\ACER\board-games\BE\node_modules\sequelize\lib\dialects\abstract\query-interface.js:407:12)
+    at async Friend.findAll (C:\Users\ACER\board-games\BE\node_modules\sequelize\lib\model.js:1140:21)
+    at async testQuery (C:\Users\ACER\board-games\BE\test_friend.js:5:26)
+{
+  "name": "SequelizeDatabaseError",
+  "parent": {
+    "code": "ER_NONUNIQ_TABLE",
+    "errno": 1066,
+    "sqlState": "42000",
+    "sqlMessage": "Not unique table/alias: 'friend'",
+    "sql": "SELECT `Friend`.`id`, `Friend`.`user_id`, `Friend`.`friend_id`, `Friend`.`status`, `Friend`.`created_at`, `friend`.`user_id` AS `friend.user_id`, `friend`.`username` AS `friend.username`, `friend`.`full_name` AS `friend.full_name`, `friend`.`avatar_url` AS `friend.avatar_url` FROM `friends` AS `Friend` LEFT OUTER JOIN `users` AS `friend` ON `Friend`.`friend_id` = `friend`.`user_id` WHERE `Friend`.`status` = 'pending';"
+  },
+  "original": {
+    "code": "ER_NONUNIQ_TABLE",
+    "errno": 1066,
+    "sqlState": "42000",
+    "sqlMessage": "Not unique table/alias: 'friend'",
+    "sql": "SELECT `Friend`.`id`, `Friend`.`user_id`, `Friend`.`friend_id`, `Friend`.`status`, `Friend`.`created_at`, `friend`.`user_id` AS `friend.user_id`, `friend`.`username` AS `friend.username`, `friend`.`full_name` AS `friend.full_name`, `friend`.`avatar_url` AS `friend.avatar_url` FROM `friends` AS `Friend` LEFT OUTER JOIN `users` AS `friend` ON `Friend`.`friend_id` = `friend`.`user_id` WHERE `Friend`.`status` = 'pending';"
+  },
+  "sql": "SELECT `Friend`.`id`, `Friend`.`user_id`, `Friend`.`friend_id`, `Friend`.`status`, `Friend`.`created_at`, `friend`.`user_id` AS `friend.user_id`, `friend`.`username` AS `friend.username`, `friend`.`full_name` AS `friend.full_name`, `friend`.`avatar_url` AS `friend.avatar_url` FROM `friends` AS `Friend` LEFT OUTER JOIN `users` AS `friend` ON `Friend`.`friend_id` = `friend`.`user_id` WHERE `Friend`.`status` = 'pending';",
+  "parameters": {}
+}

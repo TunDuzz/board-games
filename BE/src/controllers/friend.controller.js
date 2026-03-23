@@ -241,7 +241,7 @@ const getFriendsList = async (req, res) => {
             include: [
                 {
                     model: User,
-                    as: "friend",
+                    as: "friendUser",
                     attributes: ["user_id", "username", "full_name", "avatar_url"]
                 }
             ]
@@ -249,7 +249,7 @@ const getFriendsList = async (req, res) => {
 
         res.json({
             total: friends.length,
-            friends: friends.map(f => f.friend)
+            friends: friends.map(f => f.friendUser)
         });
 
     } catch (error) {
@@ -304,7 +304,7 @@ const getSentRequests = async (req, res) => {
             include: [
                 {
                     model: User,
-                    as: "friend",
+                    as: "friendUser",
                     attributes: ["user_id", "username", "full_name", "avatar_url"]
                 }
             ],
@@ -315,7 +315,7 @@ const getSentRequests = async (req, res) => {
             total: requests.length,
             requests: requests.map(r => ({
                 id: r.id,
-                to: r.friend,
+                to: r.friendUser,
                 created_at: r.created_at
             }))
         });

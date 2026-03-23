@@ -1,10 +1,22 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlayerInfoBar } from "@/components/PlayerInfoBar";
+import { getStrictValidMoves, isInCheck, isCheckmate } from "@/utils/xiangqiLogic";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { GameRoomPanel } from "@/components/GameRoomPanel";
 import { GameBoard } from "@/components/GameBoard";
+import { socket } from "@/lib/socket"; 
+import { aiService } from "@/services/ai.service";
+import { toast } from "sonner";
+import { GameOverModal } from "@/components/GameOverModal";
+import { authService } from "@/services/auth.service";
 
-import { getValidMoves } from "@/utils/xiangqiLogic";
+const formatTime = (secs) => {
+  const mins = Math.floor(secs / 60);
+  const remainingSecs = secs % 60;
+  return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
+};
 
 const initialXiangqiBoard = () => {
   const board = Array(10).fill(null).map(() => Array(9).fill(null));
@@ -52,14 +64,183 @@ const initialXiangqiBoard = () => {
 };
 
 const XiangqiGame = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const roomId = searchParams.get('roomId');
+  const code = searchParams.get('code');
+  const mode = searchParams.get('mode');
+
   const [board, setBoard] = useState(initialXiangqiBoard());
+  const boardRef = React.useRef(board);
   const [turn, setTurn] = useState('red');
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [validMoves, setValidMoves] = useState([]);
   const [history, setHistory] = useState([]);
 
+  React.useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+
+  const [myRole, setMyRole] = useState(null); 
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
+
+  const [matchId, setMatchId] = useState(null);
+  const [currentTurnUserId, setCurrentTurnUserId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalResult, setModalResult] = useState("");
+  const [modalMessage, setModalMessage] = useState("");
+
+  const currentUser = authService.getCurrentUser();
+  const myUserId = currentUser?.id;
+
+  const [lastMove, setLastMove] = useState(null);
+  const [player1Time, setPlayer1Time] = useState(1800); 
+  const [player2Time, setPlayer2Time] = useState(1800);
+  const [matchTimeLimit, setMatchTimeLimit] = useState(30);
+
+  const [player1Name, setPlayer1Name] = useState("Người chơi 1");
+  const [player2Name, setPlayer2Name] = useState("Người chơi 2");
+
+  useEffect(() => {
+    if (roomId) {
+      socket.connect();
+      socket.emit("join_game_room", { roomId });
+
+      socket.on("game_room_joined", ({ role, players, match }) => {
+        setMyRole(role);
+        toast.success(`Bạn là ${role === "player1" ? "Quân Đỏ (Red - Đi Trước)" : "Quân Đen (Black)"}`);
+
+        if (players) {
+            const p1 = players.find(p => p.role === "player1");
+            const p2 = players.find(p => p.role === "player2");
+            if (p1) setPlayer1Name(p1.username);
+            if (p2) setPlayer2Name(p2.username);
+        }
+
+        if (match) {
+            setMatchId(match.match_id);
+            if (match.currentTurn) setCurrentTurnUserId(match.currentTurn);
+        }
+      });
+
+      socket.on("player_joined", ({ username, role }) => {
+          if (role === "player2") setPlayer2Name(username);
+          else if (role === "player1") setPlayer1Name(username);
+      });
+
+      socket.on("match_started", ({ match_id, firstTurn, players }) => {
+        setMatchId(match_id);
+        setCurrentTurnUserId(firstTurn);
+        toast.success("Trận đấu bắt đầu! Lượt: " + (firstTurn === myUserId ? "Của bạn" : "Đối thủ"));
+
+        if (players) {
+            setPlayer1Name(players.player1.username);
+            setPlayer2Name(players.player2.username);
+        }
+      });
+
+      socket.on("turn_changed", ({ currentTurn }) => {
+        setCurrentTurnUserId(currentTurn);
+      });
+
+      socket.on("receive_move", ({ moveData }) => {
+        const move = moveData;
+        if (move && move.from && move.to) {
+            setLastMove(move); 
+            executeMove(move.from.row, move.from.col, move.to.row, move.to.col, false); 
+        }
+      });
+
+      socket.on("receive_draw_offer", ({ username }) => {
+          toast(`Đối thủ [${username}] cầu hòa. Bạn có đồng ý không?`, {
+              duration: 10000,
+              action: {
+                  label: "Đồng ý",
+                  onClick: () => socket.emit("accept_draw", { roomId, matchId })
+              },
+              cancel: {
+                  label: "Từ chối",
+                  onClick: () => socket.emit("reject_draw", { roomId })
+              }
+          });
+      });
+
+      socket.on("draw_rejected", ({ username, message }) => {
+         toast.warning(message || `${username} từ chối hòa cờ.`);
+      });
+
+      socket.on("receive_time_limit", ({ minutes }) => {
+          setMatchTimeLimit(minutes);
+          setPlayer1Time(minutes * 60);
+          setPlayer2Time(minutes * 60);
+          toast.info(`Cập nhật thời gian trận đấu: ${minutes} phút`);
+      });
+
+      socket.on("receive_game_over", ({ result, winnerId, message }) => {
+          setIsGameOver(true);
+          
+          if (result === "draw") {
+              setModalResult("draw");
+          } else if (result === "resign") {
+              setModalResult(winnerId === myUserId ? "win" : "resign");
+          } else {
+              setModalResult(winnerId === myUserId ? "win" : "lose");
+          }
+          
+          setModalMessage(message);
+          setIsModalOpen(true);
+      });
+
+      return () => {
+        socket.off("game_room_joined");
+        socket.off("match_started");
+        socket.off("turn_changed");
+        socket.off("receive_move");
+        socket.off("receive_draw_offer");
+        socket.off("draw_rejected");
+        socket.off("receive_game_over");
+        socket.disconnect();
+      };
+    }
+  }, [roomId, myUserId, matchId]);
+
+  useEffect(() => {
+    if (mode === 'ai' && turn === 'black' && !isAiThinking) {
+        fetchAiMove();
+    }
+  }, [turn, mode]);
+
+  const fetchAiMove = async () => {
+      setIsAiThinking(true);
+      try {
+          const data = await aiService.makeMove("xiangqi", board, [], "player2");
+          const moveResult = data.move; 
+
+          if (moveResult && moveResult.from && moveResult.to) {
+              executeMove(moveResult.from.row, moveResult.from.col, moveResult.to.row, moveResult.to.col, false);
+          }
+      } catch (error) {
+          console.error("[AI Error]:", error);
+          setTurn('red'); 
+      } finally {
+          setIsAiThinking(false);
+      }
+  };
+
   const handleSquareClick = (row, col) => {
-    // Nếu đang chọn một quân, thử di chuyển
+    if (isGameOver) return; 
+
+    if (mode === 'ai' && turn === 'black') return;
+    if (isAiThinking) return;
+
+    if (roomId) {
+      if (currentTurnUserId && currentTurnUserId !== myUserId) return;
+      
+      const isMyTurn = (myRole === 'player1' && turn === 'red') || (myRole === 'player2' && turn === 'black');
+      if (!isMyTurn && !currentTurnUserId) return;
+    }
+
     if (selectedSquare) {
       const isMoveValid = validMoves.some(m => m.row === row && m.col === col);
       if (isMoveValid) {
@@ -68,33 +249,107 @@ const XiangqiGame = () => {
       }
     }
 
-    // Chọn quân mới (phải đúng lượt)
     const piece = board[row][col];
     if (piece && piece.color === turn) {
       setSelectedSquare({ row, col });
-      setValidMoves(getValidMoves(board, row, col));
+      setValidMoves(getStrictValidMoves(board, row, col)); 
     } else {
       setSelectedSquare(null);
       setValidMoves([]);
     }
   };
 
-  const executeMove = (fromRow, fromCol, toRow, toCol) => {
-    const newBoard = board.map(r => [...r]);
+  const executeMove = (fromRow, fromCol, toRow, toCol, shouldEmit = true) => {
+    let capturedGeneral = false;
+    
+    const newBoard = boardRef.current.map(r => [...r]);
     const piece = newBoard[fromRow][fromCol];
     const targetPiece = newBoard[toRow][toCol];
+
+    if (targetPiece && (targetPiece.label === '將' || targetPiece.label === '帥')) {
+        capturedGeneral = true;
+    }
 
     newBoard[toRow][toCol] = piece;
     newBoard[fromRow][fromCol] = null;
 
+    setLastMove({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } });
+
+    if (capturedGeneral) {
+        setIsGameOver(true);
+        setModalResult("win");
+        setModalMessage(`Chiến thắng! Bạn đã ăn Tướng của đối phương!`);
+        setIsModalOpen(true);
+
+        if (shouldEmit && roomId) {
+            socket.emit("game_over", { roomId, matchId, result: "win", winnerId: myUserId });
+        }
+    } else {
+        const nextTurn = turn === 'red' ? 'black' : 'red';
+        if (isCheckmate(newBoard, nextTurn)) {
+            setIsGameOver(true);
+            setModalResult("win");
+            setModalMessage("Chiếu sát! Bạn đã giành chiến thắng!");
+            setIsModalOpen(true);
+
+            if (shouldEmit && roomId) {
+                socket.emit("game_over", { roomId, matchId, result: "win", winnerId: myUserId });
+            }
+        } else if (isInCheck(newBoard, nextTurn)) {
+            toast.warning(`Chiếu tướng! Quân ${nextTurn === 'red' ? 'Đỏ' : 'Đen'} đang bị chiếu.`);
+        }
+    }
+
+    if (shouldEmit && roomId) {
+        socket.emit("make_move", { 
+           roomId, 
+           matchId,
+           moveData: { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } } 
+        });
+    }
+
+    const desc = `${piece?.label || 'Quân'} (${fromCol+1},${fromRow+1}) ➔ (${toCol+1},${toRow+1})`;
+    setHistory(prev => [...prev, {
+        piece, 
+        from: { row: fromRow, col: fromCol }, 
+        to: { row: toRow, col: toCol }, 
+        desc
+    }]);
+
     setBoard(newBoard);
-    setTurn(turn === 'red' ? 'black' : 'red');
+    setTurn(prev => prev === 'red' ? 'black' : 'red');
     setSelectedSquare(null);
     setValidMoves([]);
+  };
 
-    // Add to history
-    const moveStr = `${piece.label} (${fromCol},${fromRow}) -> (${toCol},${toRow})`;
-    setHistory(prev => [...prev, { color: turn, desc: moveStr }]);
+  useEffect(() => {
+    if (!matchId || isGameOver) return;
+
+    const interval = setInterval(() => {
+      if (turn === 'red') {
+        setPlayer1Time(prev => {
+          if (prev <= 1) { handleTimeout("player1"); return 0; }
+          return prev - 1;
+        });
+      } else {
+        setPlayer2Time(prev => {
+          if (prev <= 1) { handleTimeout("player2"); return 0; }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [matchId, isGameOver, turn]);
+
+  const handleTimeout = (timeLeftRole) => {
+      setIsGameOver(true);
+      const amIPlayer1 = myRole === "player1";
+      const isLose = (timeLeftRole === "player1" && amIPlayer1) || (timeLeftRole === "player2" && !amIPlayer1);
+      
+      setModalResult(isLose ? "lose" : "win");
+      setModalMessage("Hết thời gian! Bạn đã " + (isLose ? "thua." : "thắng."));
+      setIsModalOpen(true);
   };
 
   const resetGame = () => {
@@ -103,6 +358,29 @@ const XiangqiGame = () => {
     setSelectedSquare(null);
     setValidMoves([]);
     setHistory([]);
+    setIsGameOver(false);
+  };
+
+  const handleOfferDraw = () => {
+    if (isGameOver) return;
+    if (roomId) {
+      socket.emit("offer_draw", { roomId });
+      toast("Đã gửi lời cầu hòa đến đối thủ.");
+    }
+  };
+
+  const handleResign = () => {
+    if (isGameOver) return;
+    if (window.confirm("Bạn chắc chắn muốn đầu hàng không?")) {
+        if (roomId) {
+          socket.emit("resign", { roomId, matchId });
+        } else {
+            setIsGameOver(true);
+            setModalResult("resign");
+            setModalMessage("Bạn đã đầu hàng!");
+            setIsModalOpen(true);
+        }
+    }
   };
 
   const movePairs = [];
@@ -118,10 +396,13 @@ const XiangqiGame = () => {
     <>
       <div className="h-full flex flex-col p-4">
         <div className="flex-1 flex flex-col gap-4 lg:flex-row min-h-0">
-          {/* Board Area */}
           <div className="flex-1 flex flex-col gap-2 min-h-0">
             <div className="shrink-0">
-              <PlayerInfoBar name="Black Tiger" rating={1950} timer="15:00" />
+              <PlayerInfoBar 
+                name={myRole === 'player1' ? player2Name : player1Name} 
+                rating={myRole === 'player1' ? 1950 : 2100} 
+                timer={myRole === 'player1' ? formatTime(player2Time) : formatTime(player1Time)} 
+              />
             </div>
 
             <div className="flex-1 min-h-0 relative">
@@ -130,17 +411,37 @@ const XiangqiGame = () => {
                 boardState={board}
                 selectedSquare={selectedSquare}
                 validMoves={validMoves}
+                lastMove={lastMove}
+                flipped={myRole === 'player2'}
                 onSquareClick={handleSquareClick}
               />
             </div>
 
             <div className="shrink-0">
-              <PlayerInfoBar name="Red Dragon" rating={2100} timer="15:00" />
+              <PlayerInfoBar 
+                name={myRole === 'player1' ? player1Name : player2Name} 
+                rating={myRole === 'player1' ? 2100 : 1950} 
+                timer={myRole === 'player1' ? formatTime(player1Time) : formatTime(player2Time)} 
+              />
             </div>
           </div>
 
-          {/* Side Panel */}
           <div className="w-full lg:w-64 space-y-4">
+            {roomId && (
+               <Card className="bg-primary/5 border-primary/20">
+                 <CardContent className="p-3 text-center font-medium">
+                   {currentTurnUserId === myUserId ? (
+                     <span className="text-green-600 animate-pulse flex items-center justify-center gap-1">
+                       <span className="h-2 w-2 bg-green-600 rounded-full"></span> Lượt của bạn
+                     </span>
+                   ) : (
+                     <span className="text-muted-foreground">⏳ Chờ đối thủ...</span>
+                   )}
+                 </CardContent>
+               </Card>
+            )}
+            
+            {code && <GameRoomPanel code={code} roomId={roomId} />}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Move History</CardTitle>
@@ -163,11 +464,6 @@ const XiangqiGame = () => {
                           <td className="px-4 py-1.5 font-medium truncate max-w-[80px]" title={pair.black}>{pair.black}</td>
                         </tr>
                       ))}
-                      {movePairs.length === 0 && (
-                        <tr className="border-b last:border-0">
-                          <td className="px-4 py-1.5 text-muted-foreground" colSpan={3}>Start playing...</td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
@@ -176,12 +472,24 @@ const XiangqiGame = () => {
 
             <div className="flex flex-col gap-2">
               <Button variant="outline" size="sm" className="w-full" onClick={resetGame}>New Game</Button>
-              <Button variant="outline" size="sm" className="w-full">Offer Draw</Button>
-              <Button variant="destructive" size="sm" className="w-full">Resign</Button>
+              <Button variant="outline" size="sm" className="w-full" onClick={handleOfferDraw}>Offer Draw</Button>
+              <Button variant="destructive" size="sm" className="w-full" onClick={handleResign}>Resign</Button>
+              <Button variant="secondary" size="sm" className="w-full" onClick={() => {
+                if (roomId) socket.emit("leave_room", { roomId });
+                setTimeout(() => navigate('/dashboard'), 300);
+              }}>Thoát phòng</Button>
             </div>
           </div>
         </div>
       </div>
+      <GameOverModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        result={modalResult} 
+        winnerName={modalResult === "win" ? "Bạn" : "Đối thủ"} 
+        message={modalMessage}
+        onExit={() => navigate('/dashboard')}
+      />
     </>
   );
 };

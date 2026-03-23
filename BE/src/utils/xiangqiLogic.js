@@ -1,13 +1,8 @@
 /**
- * Xiangqi Move Logic Utility
- * 
- * Board coordinate: board[row][col]
- * row: 0-9 (top to bottom)
- * col: 0-8 (left to right)
- * Black: Top (rows 0-4), Red: Bottom (rows 5-9)
+ * Xiangqi Move Logic Utility (Backend Copy)
  */
 
-export const getValidMoves = (board, r, c) => {
+exports.getValidMoves = (board, r, c) => {
     const piece = board[r][c];
     if (!piece) return [];
 
@@ -47,129 +42,20 @@ export const getValidMoves = (board, r, c) => {
     }
 
     return moves.filter(m => {
-        // Basic filter: must be within board and not own piece
         if (m.row < 0 || m.row > 9 || m.col < 0 || m.col > 8) return false;
         const target = board[m.row][m.col];
         return !target || target.color !== color;
     });
 };
 
-// ==========================================
-// BỔ SUNG LUẬT PHỤ & KIỂM TRA CHIẾU TƯỚNG
-// ==========================================
-
-export const findGeneral = (board, color) => {
-    const label = color === 'red' ? '帥' : '將';
-    for (let r = 0; r < 10; r++) {
-        for (let c = 3; c <= 5; c++) { // Tướng chỉ ở trong Palace
-            const piece = board[r][c];
-            if (piece && piece.color === color && piece.label === label) {
-                return { row: r, col: c };
-            }
-        }
-    }
-    return null;
-};
-
-// Kiểm tra Lộ mặt Tướng (Flying General)
-export const isFlyingGeneral = (board) => {
-    const redGeneral = findGeneral(board, 'red');
-    const blackGeneral = findGeneral(board, 'black');
-
-    if (!redGeneral || !blackGeneral) return false;
-
-    // Phải cùng cột
-    if (redGeneral.col !== blackGeneral.col) return false;
-
-    // Kiểm tra có quân nào ở giữa không
-    const col = redGeneral.col;
-    const startRow = Math.min(redGeneral.row, blackGeneral.row) + 1;
-    const endRow = Math.max(redGeneral.row, blackGeneral.row);
-
-    for (let r = startRow; r < endRow; r++) {
-        if (board[r][col]) return false; // Có cản
-    }
-
-    return true; // Hai tướng nhìn mặt nhau trực tiếp
-};
-
-// Kiểm tra một ô có bị tấn công bởi đối thủ không
-export const isSquareAttacked = (board, r, c, attackerColor) => {
-    for (let row = 0; row < 10; row++) {
-        for (let col = 0; col < 9; col++) {
-            const piece = board[row][col];
-            if (piece && piece.color === attackerColor) {
-                // Lấy nước đi giả định (pseudo-legal) - chính là cái getValidMoves hiện tại
-                const moves = getValidMoves(board, row, col);
-                if (moves.some(m => m.row === r && m.col === c)) return true;
-            }
-        }
-    }
-    return false;
-};
-
-export const isInCheck = (board, color) => {
-    const generalPos = findGeneral(board, color);
-    if (!generalPos) return false;
-
-    const enemyColor = color === 'red' ? 'black' : 'red';
-    
-    // 1. Kiểm tra bị quân địch tấn công
-    if (isSquareAttacked(board, generalPos.row, generalPos.col, enemyColor)) return true;
-
-    // 2. Kiểm tra lộ mặt Tướng (Flying General)
-    if (isFlyingGeneral(board)) return true;
-
-    return false;
-};
-
-// Nước đi THỰC SỰ hợp lệ (không để Tướng bị chiếu sau nước đi)
-export const getStrictValidMoves = (board, r, c) => {
-    const piece = board[r][c];
-    if (!piece) return [];
-
-    const pseudoMoves = getValidMoves(board, r, c);
-    const color = piece.color;
-
-    return pseudoMoves.filter(m => {
-        // Giả lập nước đi
-        const nextBoard = board.map(row => [...row]);
-        nextBoard[m.row][m.col] = piece;
-        nextBoard[r][c] = null;
-
-        // Nếu là nước đi của Tướng, kiểm tra xem sau khi đi có để lộ mặt tướng không
-        // (isFlyingGeneral chỉ check chung, nhưng nước đi bất kỳ đều có thể tạo/phá lộ mặt tướng)
-        return !isInCheck(nextBoard, color);
-    });
-};
-
-export const isCheckmate = (board, color) => {
-    if (!isInCheck(board, color)) return false;
-
-    // Duyệt tất cả quân của mình, xem có nước đi nào giải cứu được không
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const piece = board[r][c];
-            if (piece && piece.color === color) {
-                const validMoves = getStrictValidMoves(board, r, c);
-                if (validMoves.length > 0) return false; // Có nước cứu
-            }
-        }
-    }
-    return true;
-};
-
-
 const getPawnMoves = (board, r, c, color) => {
     const moves = [];
     const isRed = color === 'red';
-    const dir = isRed ? -1 : 1; // Red moves up, Black moves down
-    const sideRow = isRed ? 4 : 5; // Rows where they have crossed the river
+    const dir = isRed ? -1 : 1; 
+    const sideRow = isRed ? 4 : 5; 
 
-    // Move forward
     moves.push({ row: r + dir, col: c });
 
-    // Move sideways if across the river
     const crossedRiver = isRed ? (r <= sideRow) : (r >= sideRow);
     if (crossedRiver) {
         moves.push({ row: r, col: c - 1 });
@@ -201,7 +87,6 @@ const getChariotMoves = (board, r, c, color) => {
 
 const getHorseMoves = (board, r, c, color) => {
     const moves = [];
-    // Horse moves 2-1, but can be blocked by "leg"
     const candidates = [
         { d: [-2, -1], leg: [-1, 0] }, { d: [-2, 1], leg: [-1, 0] },
         { d: [2, -1], leg: [1, 0] }, { d: [2, 1], leg: [1, 0] },
@@ -229,11 +114,8 @@ const getCannonMoves = (board, r, c, color) => {
         while (nr >= 0 && nr < 10 && nc >= 0 && nc < 9) {
             const target = board[nr][nc];
             if (!jumped) {
-                if (!target) {
-                    moves.push({ row: nr, col: nc });
-                } else {
-                    jumped = true;
-                }
+                if (!target) moves.push({ row: nr, col: nc });
+                else jumped = true;
             } else {
                 if (target) {
                     if (target.color !== color) moves.push({ row: nr, col: nc });
@@ -257,7 +139,6 @@ const getElephantMoves = (board, r, c, color) => {
         const legR = r + dr / 2;
         const legC = c + dc / 2;
 
-        // Check river
         const inTerritory = isRed ? (nr >= 5) : (nr <= 4);
         if (inTerritory && nr >= 0 && nr < 10 && nc >= 0 && nc < 9 && !board[legR][legC]) {
             moves.push({ row: nr, col: nc });
@@ -273,7 +154,6 @@ const getAdvisorMoves = (board, r, c, color) => {
     for (let [dr, dc] of candidates) {
         const nr = r + dr;
         const nc = c + dc;
-        // In palace (rows 0-2 or 7-9, cols 3-5)
         const inPalace = (nc >= 3 && nc <= 5) && (isRed ? (nr >= 7 && nr <= 9) : (nr >= 0 && nr <= 2));
         if (inPalace) moves.push({ row: nr, col: nc });
     }
@@ -290,9 +170,5 @@ const getGeneralMoves = (board, r, c, color) => {
         const inPalace = (nc >= 3 && nc <= 5) && (isRed ? (nr >= 7 && nr <= 9) : (nr >= 0 && nr <= 2));
         if (inPalace) moves.push({ row: nr, col: nc });
     }
-
-    // Special: Flying General (Face-to-face check)
-    // Find enemy general's column
-    // This is complex, usually checked after move, but we can add it as a basic constraint if they are in same column with no pieces between
     return moves;
 };

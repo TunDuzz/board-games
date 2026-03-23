@@ -1,4 +1,4 @@
-import { Home, User, History, Trophy, LogOut, Gamepad2, Loader2 } from "lucide-react";
+import { Home, User, History, Trophy, LogOut, Gamepad2, Loader2, Users } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Home", url: "/dashboard", icon: Home },
+  { title: "Friends", url: "/friends", icon: Users },
   { title: "Profile", url: "/profile", icon: User },
   { title: "Match History", url: "/history", icon: History },
   { title: "Rankings", url: "/rankings", icon: Trophy },

@@ -12,6 +12,7 @@ import CaroGame from "./pages/games/CaroGame";
 import Profile from "./pages/user/Profile";
 import MatchHistory from "./pages/user/MatchHistory";
 import Rankings from "./pages/user/Rankings";
+import Friends from "./pages/user/Friends";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AppLayout } from "./components/AppLayout";
@@ -31,6 +32,7 @@ const App = () => (
 
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/friends" element={<Friends />} />
             <Route path="/game/chess" element={<ChessGame />} />
             <Route path="/game/xiangqi" element={<XiangqiGame />} />
             <Route path="/game/caro" element={<CaroGame />} />
