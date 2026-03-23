@@ -37,11 +37,73 @@ module.exports = (io, socket, onlineUsers) => {
                 role: playerRecord.role
             });
 
+            // Thầy cô và toàn phòng:
+            const { User } = require("../models");
+            const allPlayers = await RoomPlayer.findAll({
+                where: { room_id: roomId },
+                include: [{ model: User, attributes: ['user_id', 'username'] }]
+            });
+
+            let currentMatch = null;
+            const liveRoom = await Room.findByPk(roomId);
+            if (liveRoom && liveRoom.status === "playing") {
+                currentMatch = await Match.findOne({ where: { room_id: roomId }, order: [['created_at', 'DESC']] });
+            }
+
             socket.emit("game_room_joined", {
                 message: `Đã kết nối vào phòng ${roomId}`,
                 roomId,
-                role: playerRecord.role
+                role: playerRecord.role,
+                players: allPlayers.map(p => ({
+                    userId: p.user_id,
+                    username: p.User?.username || "Người chơi",
+                    role: p.role
+                })),
+                match: currentMatch ? {
+                    match_id: currentMatch.match_id,
+                    currentTurn: roomTurnState.get(roomId)?.currentTurn
+                } : null
             });
+
+            // Tự động Khởi động trận đấu nếu là phòng Ghép trận (is_private === false)
+            const room = await Room.findByPk(roomId);
+            if (room && room.is_private === false && allPlayers.length === 2 && room.status === "waiting") {
+                const player1 = allPlayers.find(p => p.role === "player1");
+                const player2 = allPlayers.find(p => p.role === "player2");
+
+                if (player1 && player2) {
+                    await Room.update({ status: "playing" }, { where: { room_id: roomId } });
+
+                    const match = await Match.create({
+                        room_id: roomId,
+                        game_type_id: room.game_type_id,
+                        player1_id: player1.user_id,
+                        player2_id: player2.user_id,
+                        start_time: new Date()
+                    });
+
+                    roomTurnState.set(roomId, {
+                        currentTurn: player1.user_id,
+                        moveCount: 0,
+                        player1Id: player1.user_id,
+                        player2Id: player2.user_id,
+                        moves_buffer: []
+                    });
+
+                    // Cần delay nhẹ 1 giây để cả 2 máy loading giao diện xong rồi dội Match_started mới chuẩn nhịp
+                    setTimeout(() => {
+                        io.to(roomKey).emit("match_started", {
+                            match_id: match.match_id,
+                            firstTurn: player1.user_id,
+                            message: "Trận đấu bắt đầu!",
+                            players: {
+                                player1: { userId: player1.user_id, username: player1.User?.username || "Người chơi 1" },
+                                player2: { userId: player2.user_id, username: player2.User?.username || "Người chơi 2" }
+                            }
+                        });
+                    }, 1000);
+                }
+            }
 
         } catch (error) {
             console.error("[Game] join_game_room error:", error);
@@ -58,8 +120,12 @@ module.exports = (io, socket, onlineUsers) => {
         try {
             const userId = socket.user.id;
 
+            const { User } = require("../models");
             const room = await Room.findByPk(roomId, {
-                include: [{ model: RoomPlayer }]
+                include: [{ 
+                    model: RoomPlayer,
+                    include: [{ model: User, attributes: ['user_id', 'username'] }]
+                }]
             });
 
             if (!room) return socket.emit("game_error", { message: "Không tìm thấy phòng" });
@@ -88,7 +154,8 @@ module.exports = (io, socket, onlineUsers) => {
                 currentTurn: player1.user_id,
                 moveCount: 0,
                 player1Id: player1.user_id,
-                player2Id: player2.user_id
+                player2Id: player2.user_id,
+                moves_buffer: [] 
             });
 
             // Broadcast match_started đến cả phòng
@@ -96,13 +163,22 @@ module.exports = (io, socket, onlineUsers) => {
             io.to(roomKey).emit("match_started", {
                 match_id: match.match_id,
                 firstTurn: player1.user_id,
-                message: "Trận đấu bắt đầu!"
+                message: "Trận đấu bắt đầu!",
+                players: {
+                    player1: { userId: player1.user_id, username: player1.User?.username || "Người chơi 1" },
+                    player2: { userId: player2.user_id, username: player2.User?.username || "Người chơi 2" }
+                }
             });
 
         } catch (error) {
             console.error("[Game] start_match error:", error);
             socket.emit("game_error", { message: "Lỗi bắt đầu trận" });
         }
+    });
+
+    socket.on("set_time_limit", ({ roomId, minutes }) => {
+        const roomKey = `game_room_${roomId}`;
+        io.to(roomKey).emit("receive_time_limit", { minutes });
     });
 
     // ===================================
@@ -133,15 +209,21 @@ module.exports = (io, socket, onlineUsers) => {
                     : turnState.player1Id;
                 turnState.currentTurn = nextTurn;
                 turnState.moveCount++;
+
+                // Broadcast lượt đi mới cho cả phòng
+                io.to(roomKey).emit("turn_changed", {
+                    currentTurn: nextTurn,
+                    moveCount: turnState.moveCount
+                });
             }
 
-            // Lưu nước đi vào DB để có thể replay sau
-            if (matchId) {
-                await Move.create({
+            // Thêm nước đi vào buffer RAM thay vì lưu thẳng DB
+            if (turnState) {
+                turnState.moves_buffer.push({
                     match_id: matchId,
                     player_id: userId,
                     move_data: typeof moveData === "string" ? moveData : JSON.stringify(moveData),
-                    move_order: turnState ? turnState.moveCount : moveOrder
+                    move_order: turnState.moveCount
                 });
             }
 
@@ -164,6 +246,12 @@ module.exports = (io, socket, onlineUsers) => {
                 winnerId,
                 message: winnerId ? `Người thắng: ${winnerId}` : "Hòa cờ!"
             });
+
+            // Lưu các nước đi từ Buffer vào DB 1 lần duy nhất để tối ưu
+            const turnState = roomTurnState.get(roomId);
+            if (turnState && turnState.moves_buffer && turnState.moves_buffer.length > 0) {
+                await Move.bulkCreate(turnState.moves_buffer);
+            }
 
             // Xóa state lượt đi
             roomTurnState.delete(roomId);
@@ -206,6 +294,10 @@ module.exports = (io, socket, onlineUsers) => {
                 message: `${socket.user.username} đã đầu hàng!`
             });
 
+            if (turnState && turnState.moves_buffer && turnState.moves_buffer.length > 0) {
+                await Move.bulkCreate(turnState.moves_buffer);
+            }
+
             roomTurnState.delete(roomId);
 
             if (matchId) {
@@ -222,6 +314,49 @@ module.exports = (io, socket, onlineUsers) => {
     });
 
     // ===================================
+    // CẦU HÒA (Offer Draw)
+    // ===================================
+    socket.on("offer_draw", ({ roomId }) => {
+        const roomKey = `game_room_${roomId}`;
+        socket.to(roomKey).emit("receive_draw_offer", {
+            userId: socket.user.id,
+            username: socket.user.username
+        });
+    });
+
+    socket.on("accept_draw", async ({ roomId, matchId }) => {
+        try {
+            const roomKey = `game_room_${roomId}`;
+            
+            io.to(roomKey).emit("receive_game_over", {
+                result: "draw",
+                message: "Hai bên đã đồng ý hòa cờ!"
+            });
+
+            roomTurnState.delete(roomId);
+
+            if (matchId) {
+                await Match.update(
+                    { result: "draw", winner_id: null, end_time: new Date() },
+                    { where: { match_id: matchId } }
+                );
+            }
+            await Room.update({ status: "ended" }, { where: { room_id: roomId } });
+
+        } catch (error) {
+            console.error("[Game] accept_draw error:", error);
+        }
+    });
+
+    socket.on("reject_draw", ({ roomId }) => {
+        const roomKey = `game_room_${roomId}`;
+        socket.to(roomKey).emit("draw_rejected", {
+            username: socket.user.username,
+            message: "Đối thủ từ chối hòa cờ."
+        });
+    });
+
+    // ===================================
     // CHAT TRONG PHÒNG
     // ===================================
     socket.on("send_room_message", ({ roomId, text }) => {
@@ -232,6 +367,75 @@ module.exports = (io, socket, onlineUsers) => {
             text,
             timestamp: new Date()
         });
+    });
+
+    // ===================================
+    // RỜI PHÒNG (Leave Room / Thoát phòng)
+    // ===================================
+    socket.on("leave_room", async ({ roomId }) => {
+        try {
+            const userId = socket.user.id;
+            const roomKey = `game_room_${roomId}`;
+            const turnState = roomTurnState.get(roomId);
+
+            const room = await Room.findByPk(roomId);
+            if (!room) return;
+
+            // 1. Nếu đang chơi (playing), rời đi coi như đầu hàng
+            if (room.status === "playing") {
+                let winnerId = null;
+                if (turnState) {
+                    winnerId = turnState.player1Id === userId ? turnState.player2Id : turnState.player1Id;
+                }
+
+                io.to(roomKey).emit("receive_game_over", {
+                    result: "resign",
+                    winnerId,
+                    resignedBy: userId,
+                    message: `${socket.user.username} đã rời phòng (Đầu hàng)!`
+                });
+
+                if (turnState && turnState.moves_buffer && turnState.moves_buffer.length > 0) {
+                    const { Move } = require("../models");
+                    await Move.bulkCreate(turnState.moves_buffer).catch(() => {});
+                }
+
+                roomTurnState.delete(roomId);
+
+                const match = await Match.findOne({ where: { room_id: roomId }, order: [['match_id', 'DESC']] });
+                if (match) {
+                    await Match.update(
+                        { result: "resign", winner_id: winnerId, end_time: new Date() },
+                        { where: { match_id: match.match_id } }
+                    );
+                }
+
+                await Room.update({ status: "ended" }, { where: { room_id: roomId } });
+            }
+
+            // 2. Xóa tư cách RoomPlayer
+            await RoomPlayer.destroy({ where: { room_id: roomId, user_id: userId } });
+
+            // 3. Thông báo cho người còn lại
+            socket.to(roomKey).emit("player_left", {
+                userId,
+                username: socket.user.username,
+                message: `${socket.user.username} đã thoát khỏi phòng.`
+            });
+
+            // 4. Nếu phòng không còn ai, kết thúc hẳn
+            const leftover = await RoomPlayer.count({ where: { room_id: roomId } });
+            if (leftover === 0) {
+                await Room.update({ status: "ended" }, { where: { room_id: roomId } });
+            }
+
+            // Thoát socket.join
+            socket.leave(roomKey);
+            delete socket.currentRoomId;
+
+        } catch (error) {
+            console.error("[Game] leave_room error:", error);
+        }
     });
 
     // ===================================

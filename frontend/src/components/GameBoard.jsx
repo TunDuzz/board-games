@@ -20,6 +20,8 @@ export const GameBoard = ({
     boardState = [],
     selectedSquare = null,
     validMoves = [],
+    lastMove = null, // Thêm vết nước đi cuối
+    flipped = false, // Lật bàn cờ cho người chơi bên kia
     onSquareClick
 }) => {
     const [containerSize, setContainerSize] = useState({ width: 800, height: 800 });
@@ -97,6 +99,12 @@ export const GameBoard = ({
         } else {
             col = Math.floor(x / cellSize);
             row = Math.floor(y / cellSize);
+        }
+
+        // Đảo ngược nếu board lật
+        if (flipped) {
+            col = cols - 1 - col;
+            row = rows - 1 - row;
         }
 
         // Kiểm tra tính hợp lệ của tọa độ trước khi gọi callback
@@ -200,17 +208,20 @@ export const GameBoard = ({
     // 6. UI Gợi ý nước đi (Hints)
     const renderHints = () => {
         return validMoves.map((move, idx) => {
-            const centerX = isIntersectionBased ? move.col * cellSize : move.col * cellSize + cellSize / 2;
-            const centerY = isIntersectionBased ? move.row * cellSize : move.row * cellSize + cellSize / 2;
+            const renderC = flipped ? cols - 1 - move.col : move.col;
+            const renderR = flipped ? rows - 1 - move.row : move.row;
+
+            const centerX = isIntersectionBased ? renderC * cellSize : renderC * cellSize + cellSize / 2;
+            const centerY = isIntersectionBased ? renderR * cellSize : renderR * cellSize + cellSize / 2;
 
             const targetPiece = boardState[move.row]?.[move.col];
 
             return (
                 <Group key={`hint-${idx}`} x={centerX} y={centerY}>
                     {targetPiece ? (
-                        <Circle radius={cellSize * 0.4} stroke="rgba(0, 255, 0, 0.4)" strokeWidth={4} />
+                        <Circle radius={isIntersectionBased ? cellSize * 0.4 : cellSize * 0.45} stroke="rgba(239, 68, 68, 0.7)" strokeWidth={4} />
                     ) : (
-                        <Circle radius={cellSize * 0.15} fill="rgba(0, 255, 0, 0.4)" />
+                        <Circle radius={cellSize * 0.15} fill="rgba(14, 165, 233, 0.6)" />
                     )}
                 </Group>
             );
@@ -227,8 +238,11 @@ export const GameBoard = ({
                 const piece = boardState[r]?.[c];
                 if (!piece) continue;
 
-                const centerX = isIntersectionBased ? c * cellSize : c * cellSize + cellSize / 2;
-                const centerY = isIntersectionBased ? r * cellSize : r * cellSize + cellSize / 2;
+                const renderC = flipped ? cols - 1 - c : c;
+                const renderR = flipped ? rows - 1 - r : r;
+
+                const centerX = isIntersectionBased ? renderC * cellSize : renderC * cellSize + cellSize / 2;
+                const centerY = isIntersectionBased ? renderR * cellSize : renderR * cellSize + cellSize / 2;
 
                 elements.push(
                     <Group key={`p-${r}-${c}`} x={centerX} y={centerY}>
@@ -317,12 +331,38 @@ export const GameBoard = ({
 
                     {selectedSquare && (
                         <Rect
-                            x={(isIntersectionBased ? selectedSquare.col : selectedSquare.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                            y={(isIntersectionBased ? selectedSquare.row : selectedSquare.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                            x={(flipped ? cols - 1 - selectedSquare.col : selectedSquare.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                            y={(flipped ? rows - 1 - selectedSquare.row : selectedSquare.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
                             width={cellSize}
                             height={cellSize}
                             fill="rgba(255, 255, 0, 0.3)"
                         />
+                    )}
+
+                    {/* Highlight nước đi cuối cùng (Last Move) */}
+                    {lastMove && (
+                       <>
+                         {/* Điểm xuất phát (Chess/Xiangqi) */}
+                         {lastMove.from && (
+                             <Rect
+                                 x={(flipped ? cols - 1 - lastMove.from.col : lastMove.from.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                 y={(flipped ? rows - 1 - lastMove.from.row : lastMove.from.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                 width={cellSize}
+                                 height={cellSize}
+                                 fill="rgba(0, 0, 255, 0.15)"
+                             />
+                         )}
+                         {/* Điểm đến hoặc Tọa độ đơn (Caro) */}
+                         {(lastMove.to || lastMove.col !== undefined) && (
+                             <Rect
+                                 x={(flipped ? cols - 1 - (lastMove.to?.col ?? lastMove.col) : (lastMove.to?.col ?? lastMove.col)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                 y={(flipped ? rows - 1 - (lastMove.to?.row ?? lastMove.row) : (lastMove.to?.row ?? lastMove.row)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                 width={cellSize}
+                                 height={cellSize}
+                                 fill="rgba(0, 0, 255, 0.25)"
+                             />
+                         )}
+                       </>
                     )}
                 </Layer>
 

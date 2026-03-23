@@ -25,6 +25,8 @@ User.belongsToMany(GameType, { through: UserGameStats, foreignKey: "user_id", as
 GameType.belongsToMany(User, { through: UserGameStats, foreignKey: "game_type_id", as: 'typeUsers' });
 
 Room.belongsTo(User, { as: "host", foreignKey: "host_id" });
+Room.belongsTo(GameType, { foreignKey: "game_type_id" });
+GameType.hasMany(Room, { foreignKey: "game_type_id" });
 
 Match.belongsTo(Room, { foreignKey: "room_id" });
 Match.belongsTo(User, { as: "player1", foreignKey: "player1_id" });
@@ -66,7 +68,7 @@ User.hasMany(RoomPlayer, { foreignKey: "user_id" });
 
 // Friend relationships
 Friend.belongsTo(User, { as: "user", foreignKey: "user_id" });
-Friend.belongsTo(User, { as: "friend", foreignKey: "friend_id" });
+Friend.belongsTo(User, { as: "friendUser", foreignKey: "friend_id" });
 
 User.hasMany(Friend, { as: "friendsInitiated", foreignKey: "user_id" });
 User.hasMany(Friend, { as: "friendsReceived", foreignKey: "friend_id" });

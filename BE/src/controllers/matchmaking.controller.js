@@ -29,18 +29,35 @@ exports.joinQueue = async (req, res) => {
         // 2. Kiểm tra user đã ở trong phòng hoặc đang queue chưa
         const isQueued = await MatchmakingQueue.findOne({ where: { user_id: userId } });
         if (isQueued) {
+            console.log(`[Queue] User ${userId} is blocked by MatchmakingQueue row:`, isQueued.toJSON ? isQueued.toJSON() : isQueued);
             return res.status(400).json({ message: "Bạn đã đang trong hàng chờ tìm trận" });
         }
 
-        const isInRoom = await RoomPlayer.findOne({
+        // 2.2 Sửa lỗi rác phòng: Chỉ block nếu đang bận PLAYING
+        const playingRoom = await RoomPlayer.findOne({
             where: { user_id: userId },
             include: [{
                 model: Room,
-                where: { status: { [Op.ne]: "ended" } } // Đang waiting hoặc playing
+                where: { status: "playing" }
             }]
         });
-        if (isInRoom) {
-            return res.status(400).json({ message: "Bạn đang trong một phòng, không thể tìm trận mới" });
+
+        if (playingRoom) {
+            console.log(`[Queue] User ${userId} is blocked by playingRoom row:`, playingRoom.toJSON ? playingRoom.toJSON() : playingRoom);
+            return res.status(400).json({ message: "Bạn đang trong một trận đấu, không thể tìm trận mới" });
+        }
+
+        // Auto-clear các dòng RoomPlayer ở những phòng rác "waiting" bị kẹt
+        const waitingRooms = await RoomPlayer.findAll({
+            where: { user_id: userId },
+            include: [{
+                model: Room,
+                where: { status: "waiting" }
+            }]
+        });
+
+        for (const wr of waitingRooms) {
+            await wr.destroy();
         }
 
         // 3. Tìm đối thủ tiềm năng (cùng game type)
@@ -150,7 +167,7 @@ exports.checkStatus = async (req, res) => {
             where: { user_id: userId },
             include: [{
                 model: Room,
-                where: { status: "waiting", is_private: false }
+                where: { status: { [Op.in]: ["waiting", "playing"] }, is_private: false }
             }],
             order: [["joined_at", "DESC"]]
         });
