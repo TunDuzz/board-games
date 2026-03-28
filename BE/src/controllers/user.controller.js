@@ -1,4 +1,4 @@
-const { User, Match, UserStats, UserGameStats } = require("../models");
+const { User, Match, UserStats, UserGameStats, Move } = require("../models");
 
 // Lấy thông tin cá nhân
 const getProfile = async (req, res) => {
@@ -19,6 +19,7 @@ const getProfile = async (req, res) => {
 
         res.json(userData);
     } catch (error) {
+        console.error("[Profile Error]:", error);
         res.status(500).json({ message: "Lỗi server!", error: error.message });
     }
 };
@@ -60,6 +61,34 @@ const getMatchHistory = async (req, res) => {
         });
 
         res.json(matches);
+    } catch (error) {
+        res.status(500).json({ message: "Lỗi server!", error: error.message });
+    }
+};
+
+// Lấy danh sách nước đi của một trận đấu để Replay
+const getMatchMoves = async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const moves = await Move.findAll({
+            where: { match_id: parseInt(matchId) },
+            order: [["move_order", "ASC"]]
+        });
+
+        const match = await Match.findOne({
+            where: { match_id: parseInt(matchId) },
+            include: [{ model: require("../models").GameType, attributes: ["name"] }]
+        });
+
+        if (!match) return res.status(404).json({ message: "Không tìm thấy trận đấu" });
+
+        res.json({
+            match,
+            moves: moves.map(m => ({
+                ...m.toJSON(),
+                move_data: typeof m.move_data === "string" ? JSON.parse(m.move_data) : m.move_data
+            }))
+        });
     } catch (error) {
         res.status(500).json({ message: "Lỗi server!", error: error.message });
     }
@@ -137,4 +166,4 @@ const changePassword = async (req, res) => {
     }
 };
 
-module.exports = { getProfile, updateProfile, getMatchHistory, getRankings, changePassword };
+module.exports = { getProfile, updateProfile, getMatchHistory, getRankings, changePassword, getMatchMoves };

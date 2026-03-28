@@ -21,6 +21,8 @@ export const GameBoard = ({
     selectedSquare = null,
     validMoves = [],
     lastMove = null, // Thêm vết nước đi cuối
+    winningLine = [], // Thêm đường thắng
+    hintMove = null, // Thêm nước đi gợi ý
     flipped = false, // Lật bàn cờ cho người chơi bên kia
     onSquareClick
 }) => {
@@ -228,6 +230,63 @@ export const GameBoard = ({
         });
     };
 
+    const renderHint = () => {
+        if (!hintMove) return null;
+        
+        // Caro hint format is {row, col}, Chess/Xiangqi is {from: {row, col}, to: {row, col}}
+        const isCaro = gameType === 'caro';
+        
+        if (isCaro) {
+            const renderC = flipped ? cols - 1 - hintMove.col : hintMove.col;
+            const renderR = flipped ? rows - 1 - hintMove.row : hintMove.row;
+            const centerX = isIntersectionBased ? renderC * cellSize : renderC * cellSize + cellSize / 2;
+            const centerY = isIntersectionBased ? renderR * cellSize : renderR * cellSize + cellSize / 2;
+
+            return (
+                <Group x={centerX} y={centerY}>
+                    <Circle
+                        radius={cellSize * 0.35}
+                        fill="rgba(255, 193, 7, 0.3)"
+                        stroke="#ffc107"
+                        strokeWidth={2}
+                        dash={[4, 4]}
+                    />
+                    <Circle radius={4} fill="#ffc107" />
+                </Group>
+            );
+        }
+
+        const renderCFrom = flipped ? cols - 1 - hintMove.from.col : hintMove.from.col;
+        const renderRFrom = flipped ? rows - 1 - hintMove.from.row : hintMove.from.row;
+        const renderCTo = flipped ? cols - 1 - hintMove.to.col : hintMove.to.col;
+        const renderRTo = flipped ? rows - 1 - hintMove.to.row : hintMove.to.row;
+
+        const centerXFrom = isIntersectionBased ? renderCFrom * cellSize : renderCFrom * cellSize + cellSize / 2;
+        const centerYFrom = isIntersectionBased ? renderRFrom * cellSize : renderRFrom * cellSize + cellSize / 2;
+        const centerXTo = isIntersectionBased ? renderCTo * cellSize : renderCTo * cellSize + cellSize / 2;
+        const centerYTo = isIntersectionBased ? renderRTo * cellSize : renderRTo * cellSize + cellSize / 2;
+
+        return (
+            <Group>
+                <Line
+                    points={[centerXFrom, centerYFrom, centerXTo, centerYTo]}
+                    stroke="#ffc107"
+                    strokeWidth={4}
+                    dash={[10, 5]}
+                    opacity={0.6}
+                />
+                <Circle
+                    x={centerXTo}
+                    y={centerYTo}
+                    radius={cellSize * 0.2}
+                    fill="rgba(255, 193, 7, 0.4)"
+                    stroke="#ffc107"
+                    strokeWidth={2}
+                />
+            </Group>
+        );
+    };
+
     // 7. UI Vẽ Toàn Bộ Quân Cờ
     const renderPieces = () => {
         if (!boardState || boardState.length === 0) return null;
@@ -317,6 +376,30 @@ export const GameBoard = ({
         return null;
     };
 
+    const renderWinningLine = () => {
+        if (!winningLine || winningLine.length < 5) return null;
+
+        // Chuyển đổi tọa độ board sang tọa độ canvas
+        const points = winningLine.flatMap(pos => {
+            const renderC = flipped ? cols - 1 - pos.col : pos.col;
+            const renderR = flipped ? rows - 1 - pos.row : pos.row;
+            return [renderC * cellSize, renderR * cellSize];
+        });
+
+        return (
+            <Line
+                points={points}
+                stroke="red"
+                strokeWidth={6}
+                lineCap="round"
+                lineJoin="round"
+                opacity={0.8}
+                shadowColor="red"
+                shadowBlur={10}
+            />
+        );
+    };
+
     return (
         <div ref={containerRef} className="flex justify-center items-center w-full h-full min-h-0 overflow-hidden">
             <Stage width={stageWidth} height={stageHeight} onMouseDown={handleCanvasClick} onTouchStart={handleCanvasClick}>
@@ -349,7 +432,7 @@ export const GameBoard = ({
                                  y={(flipped ? rows - 1 - lastMove.from.row : lastMove.from.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
                                  width={cellSize}
                                  height={cellSize}
-                                 fill="rgba(0, 0, 255, 0.15)"
+                                 fill="rgba(255, 235, 59, 0.3)"
                              />
                          )}
                          {/* Điểm đến hoặc Tọa độ đơn (Caro) */}
@@ -359,7 +442,7 @@ export const GameBoard = ({
                                  y={(flipped ? rows - 1 - (lastMove.to?.row ?? lastMove.row) : (lastMove.to?.row ?? lastMove.row)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
                                  width={cellSize}
                                  height={cellSize}
-                                 fill="rgba(0, 0, 255, 0.25)"
+                                 fill="rgba(255, 235, 59, 0.4)"
                              />
                          )}
                        </>
@@ -372,6 +455,8 @@ export const GameBoard = ({
 
                 <Layer x={padding} y={padding}>
                     {renderPieces()}
+                    {renderHint()}
+                    {gameType === 'caro' && renderWinningLine()}
                 </Layer>
             </Stage>
         </div>

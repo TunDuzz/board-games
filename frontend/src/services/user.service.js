@@ -21,8 +21,8 @@ export const userService = {
         return response.data;
     },
 
-    async changePassword(currentPassword, newPassword) {
-        const response = await http.put('/user/change-password', { currentPassword, newPassword });
+    async getMatchMoves(matchId) {
+        const response = await http.get(`/user/match/${matchId}/moves`);
         return response.data;
     }
 };

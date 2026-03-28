@@ -9,7 +9,7 @@ const PIECE_VALUES = {
 
 const { getValidMoves } = require('./xiangqiLogic'); 
 
-exports.getBestXiangqiMove = (board, turn = 'black') => {
+exports.getBestXiangqiMove = (board, turn = 'black', difficulty = 'medium') => {
     let bestMove = null;
     let bestScore = turn === 'red' ? -Infinity : Infinity;
 
@@ -28,8 +28,11 @@ exports.getBestXiangqiMove = (board, turn = 'black') => {
 
     if (allMoves.length === 0) return null;
 
-    // Duyệt Depth 2
-    const depth = 2;
+    // Cấp độ khó tương ứng với độ sâu
+    let depth = 2;
+    if (difficulty === 'easy') depth = 1;
+    else if (difficulty === 'hard') depth = 3;
+
     for (const move of allMoves) {
         const backBoard = board.map(row => [...row]);
         const piece = backBoard[move.from.row][move.from.col];

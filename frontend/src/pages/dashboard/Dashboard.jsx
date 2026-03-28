@@ -10,8 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { matchmakingService } from "@/services/matchmaking.service";
 import { roomService } from "@/services/room.service";
+import { friendService } from "@/services/friend.service";
+import { gameInviteService } from "@/services/gameInvite.service";
 import { toast } from "sonner";
 import GameInvitesList from "@/components/GameInvitesList";
+import { socket } from "@/lib/socket";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const gameCards = [
   {
@@ -48,6 +52,7 @@ const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // States cho Modal vÃ  Matchmaking
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -56,23 +61,44 @@ const Dashboard = () => {
   const [roomCode, setRoomCode] = useState("");
   const [searchTime, setSearchTime] = useState(0);
   const [inputCode, setInputCode] = useState("");
+  const [friends, setFriends] = useState([]);
+  const [currentRoom, setCurrentRoom] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [profileData, historyData] = await Promise.all([
+        const [profileData, historyData, friendsData] = await Promise.all([
           userService.getProfile(),
-          userService.getMatchHistory()
+          userService.getMatchHistory(),
+          friendService.getFriends()
         ]);
         setUser(profileData);
         setMatches(historyData);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
+        setFriends(friendsData.friends || []);
+      } catch (err) {
+        console.error("Failed to fetch dashboard data:", err);
+        setError(err.response?.data?.message || err.message);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    socket.on("friend_status_changed", ({ userId, status }) => {
+      setFriends(prev => prev.map(f => 
+        f.user_id === userId ? { ...f, status } : f
+      ));
+    });
+
+    return () => {
+      socket.off("friend_status_changed");
+    };
   }, []);
 
   // Effect for matchmaking polling
@@ -157,11 +183,28 @@ const Dashboard = () => {
     try {
       const data = await roomService.createRoom(selectedGame.type);
       setRoomCode(data.room?.room_code);
+      setCurrentRoom(data.room);
       toast.success("Tạo phòng thành công!");
-      setIsModalOpen(false);
-      navigate(`${selectedGame.url}?roomId=${data.room?.room_id}&code=${data.room?.room_code}`);
+      // Không chuyển hướng ngay lập tức nếu muốn mời bạn bè
+      // navigate(`${selectedGame.url}?roomId=${data.room?.room_id}&code=${data.room?.room_code}`);
     } catch (error) {
       toast.error(error.response?.data?.message || "Lỗi tạo phòng.");
+    }
+  };
+
+  const handleSendInvite = async (friendId) => {
+    if (!currentRoom) return;
+    try {
+      await gameInviteService.sendInvite(friendId, currentRoom.room_id);
+      toast.success("Đã gửi lời mời chơi!");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Lỗi gửi lời mời.");
+    }
+  };
+
+  const handleEnterRoom = () => {
+    if (currentRoom && selectedGame) {
+      navigate(`${selectedGame.url}?roomId=${currentRoom.room_id}&code=${currentRoom.room_code}`);
     }
   };
 
@@ -185,9 +228,12 @@ const Dashboard = () => {
     );
   }
 
-  if (!user) {
+  if (error || !user) {
     return (
-      <div className="text-center py-10">Không tìm thấy thông tin người dùng.</div>
+      <div className="text-center py-10 space-y-4">
+        <p className="text-muted-foreground">{error || "Không tìm thấy thông tin người dùng."}</p>
+        <Button onClick={() => window.location.reload()}>Thử lại</Button>
+      </div>
     );
   }
 
@@ -308,7 +354,7 @@ const Dashboard = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-3 py-4">
+          <div className="flex flex-col gap-3 py-4 max-h-[70vh] overflow-y-auto">
             {isSearching ? (
               <div className="flex flex-col items-center justify-center p-6 space-y-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -317,15 +363,62 @@ const Dashboard = () => {
               </div>
             ) : roomCode ? (
               <div className="flex flex-col items-center justify-center p-6 space-y-4 text-center">
-                <div className="bg-emerald-100 text-emerald-700 font-bold p-3 rounded-md animate-bounce">
+                <div className="bg-emerald-100 text-emerald-700 font-bold p-3 rounded-md animate-bounce w-full">
                   Phòng đã tạo!
                 </div>
                 <p className="text-xl font-black tracking-widest">{roomCode}</p>
-                <p className="text-sm text-muted-foreground">Chia sẻ mã này với bạn bè để cùng chơi.</p>
-                <Button variant="outline" className="w-full mt-2" onClick={() => { navigator.clipboard.writeText(roomCode); toast.success("Đã copy!"); }}>
-                   Copy Mã Phòng
-                </Button>
-                <Button className="w-full mt-2" onClick={() => setIsModalOpen(false)}>Đóng</Button>
+                
+                <div className="w-full space-y-4">
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => { navigator.clipboard.writeText(roomCode); toast.success("Đã copy!"); }}>
+                       Copy Mã
+                    </Button>
+                    <Button className="flex-1" onClick={handleEnterRoom}>Vào Phòng</Button>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-semibold mb-3 text-left">Mời bạn bè online:</p>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                      {friends.filter(f => f.status === 'online' || f.status === 'in_game').length > 0 ? (
+                        friends.filter(f => f.status === 'online' || f.status === 'in_game').map(friend => (
+                          <div key={friend.user_id} className="flex items-center justify-between p-2 rounded-lg bg-accent/30">
+                            <div className="flex items-center gap-2">
+                              <div className="relative">
+                                <Avatar className="h-7 w-7">
+                                  <AvatarImage src={friend.avatar_url} />
+                                  <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
+                                    {friend.username.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-background z-10 ${
+                                  friend.status === 'in_game' ? 'bg-amber-500' : 'bg-green-500'
+                                }`} />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-medium truncate max-w-[100px]">{friend.username}</span>
+                                {friend.status === 'in_game' && (
+                                  <span className="text-[8px] text-amber-600 leading-none">Trong trận</span>
+                                )}
+                              </div>
+                            </div>
+                            <Button 
+                              size="xs" 
+                              className="h-7 text-[10px]" 
+                              disabled={friend.status === 'in_game'}
+                              onClick={() => handleSendInvite(friend.user_id)}
+                            >
+                              {friend.status === 'in_game' ? "Bận" : "Mời"}
+                            </Button>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-muted-foreground py-2 italic text-left">Không có bạn bè nào đang online.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <Button variant="ghost" className="w-full mt-2" onClick={() => { setRoomCode(""); setCurrentRoom(null); }}>Quay lại</Button>
               </div>
             ) : (
               <>

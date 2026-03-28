@@ -6,6 +6,7 @@ import { friendService } from "@/services/friend.service";
 import { gameInviteService } from "@/services/gameInvite.service";
 import { toast } from "sonner";
 import { Copy, Share2, Users } from "lucide-react";
+import { socket } from "@/lib/socket";
 
 export const GameRoomPanel = ({ code, roomId }) => {
     const [friends, setFriends] = useState([]);
@@ -29,6 +30,24 @@ export const GameRoomPanel = ({ code, roomId }) => {
             fetchFriends();
         }
     }, [roomId]);
+
+    useEffect(() => {
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        const handleStatusChange = ({ userId, status }) => {
+            setFriends(prev => prev.map(f => 
+                f.user_id === userId ? { ...f, status } : f
+            ));
+        };
+
+        socket.on("friend_status_changed", handleStatusChange);
+
+        return () => {
+            socket.off("friend_status_changed", handleStatusChange);
+        };
+    }, []);
 
     const handleCopyCode = () => {
         navigator.clipboard.writeText(code);
@@ -74,24 +93,34 @@ export const GameRoomPanel = ({ code, roomId }) => {
                         {friends.map(friend => (
                             <div key={friend.user_id} className="flex items-center justify-between p-2 rounded-md hover:bg-background/50">
                                 <div className="flex items-center gap-2">
-                                    <Avatar className="h-6 w-6">
-                                        <AvatarImage src={friend.avatar_url} />
-                                        <AvatarFallback className="text-[10px]">
-                                            {(friend.full_name || friend.username).slice(0, 2).toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-xs font-semibold truncate w-24">
-                                        {friend.full_name || friend.username}
-                                    </span>
+                                    <div className="relative">
+                                        <Avatar className="h-7 w-7">
+                                            <AvatarImage src={friend.avatar_url} />
+                                            <AvatarFallback className="text-[10px]">
+                                                {(friend.full_name || friend.username).slice(0, 2).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background z-10 ${
+                                            friend.status === 'in_game' ? 'bg-amber-500' : (friend.status === 'online' ? 'bg-green-500' : 'bg-gray-400')
+                                        }`} />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-semibold truncate max-w-[100px]">
+                                            {friend.full_name || friend.username}
+                                        </span>
+                                        <span className="text-[9px] text-muted-foreground leading-none">
+                                            {friend.status === 'in_game' ? 'Đang trong trận' : (friend.status === 'online' ? 'Online' : 'Offline')}
+                                        </span>
+                                    </div>
                                 </div>
                                 <Button 
                                     size="sm" 
-                                    variant="outline" 
-                                    className="h-6 text-[10px] px-2"
-                                    disabled={invitingIds.includes(friend.user_id)}
+                                    variant={(friend.status === 'online') ? "outline" : "ghost"} 
+                                    className="h-7 text-[10px] px-3"
+                                    disabled={invitingIds.includes(friend.user_id) || friend.status !== 'online'}
                                     onClick={() => handleInviteFriend(friend.user_id)}
                                 >
-                                    {invitingIds.includes(friend.user_id) ? "..." : "Mời"}
+                                    {invitingIds.includes(friend.user_id) ? "..." : (friend.status === 'online' ? "Mời" : (friend.status === 'in_game' ? "Bận" : "Offline"))}
                                 </Button>
                             </div>
                         ))}

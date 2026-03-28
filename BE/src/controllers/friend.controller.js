@@ -57,6 +57,23 @@ const sendFriendRequest = async (req, res) => {
             status: "pending"
         });
 
+        // Gửi thông báo socket real-time nếu người nhận online
+        const io = req.app.get("io");
+        const users = req.app.get("onlineUsers");
+        
+        if (io && users) {
+            const recipientSocketId = users.get(toUserId);
+            if (recipientSocketId) {
+                const sender = await User.findByPk(fromUserId, {
+                    attributes: ["user_id", "username", "full_name", "avatar_url"]
+                });
+                io.to(recipientSocketId).emit("friend_request_received", {
+                    fromUser: sender,
+                    request_id: friendRequest.id
+                });
+            }
+        }
+
         res.status(201).json({
             message: "Đã gửi lời mời kết bạn!",
             request: friendRequest
@@ -232,6 +249,8 @@ const unblockUser = async (req, res) => {
 const getFriendsList = async (req, res) => {
     try {
         const userId = req.user.id;
+        const onlineUsers = req.app.get("onlineUsers") || new Map();
+        const inGameUsers = req.app.get("inGameUsers") || new Map();
 
         const friends = await Friend.findAll({
             where: {
@@ -247,9 +266,24 @@ const getFriendsList = async (req, res) => {
             ]
         });
 
+        const friendsWithStatus = friends.map(f => {
+            const friendData = f.friendUser.toJSON();
+            let status = "offline";
+            if (inGameUsers.has(friendData.user_id)) {
+                status = "in_game";
+            } else if (onlineUsers.has(friendData.user_id)) {
+                status = "online";
+            }
+            
+            return {
+                ...friendData,
+                status
+            };
+        });
+
         res.json({
-            total: friends.length,
-            friends: friends.map(f => f.friendUser)
+            message: "Lấy danh sách bạn bè thành công!",
+            friends: friendsWithStatus
         });
 
     } catch (error) {
