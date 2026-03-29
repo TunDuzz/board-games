@@ -25,7 +25,7 @@ const BLOCK_SCORE = {
 /**
  * Tìm nước đi tốt nhất
  */
-exports.getBestCaroMove = (movesHistory, botColor = 'White') => {
+exports.getBestCaroMove = (movesHistory, botColor = 'White', difficulty = 'medium') => {
     // 1. Dựng lại bàn cờ 2D
     const board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
     movesHistory.forEach(m => {
@@ -46,7 +46,11 @@ exports.getBestCaroMove = (movesHistory, botColor = 'White') => {
 
     let bestMove = possibleMoves[0];
     let bestScore = -Infinity;
-    const depth = 2; // Độ sâu 2 hoặc 3 để chạy nhanh trên node list. 2 là an toàn cho CPU
+    
+    // Cấp độ khó tương ứng với độ sâu Minimax
+    let depth = 2; 
+    if (difficulty === 'easy') depth = 1;
+    else if (difficulty === 'hard') depth = 3;
 
     for (const move of possibleMoves) {
         // Giả lập đánh thử

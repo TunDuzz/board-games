@@ -9,7 +9,7 @@ const PIECE_VALUES = {
 
 const { getValidMoves, getPieceColor } = require('./chessLogic'); // Giả sử tui sẽ copy file logic qua đây
 
-exports.getBestChessMove = (board, turn = 'black') => {
+exports.getBestChessMove = (board, turn = 'black', difficulty = 'medium') => {
     let bestMove = null;
     let bestScore = turn === 'white' ? -Infinity : Infinity;
 
@@ -28,8 +28,11 @@ exports.getBestChessMove = (board, turn = 'black') => {
 
     if (allMoves.length === 0) return null;
 
-    // Duyệt Depth 2 cho cờ vua để tính toán nhanh
-    const depth = 2;
+    // Cấp độ khó tương ứng với độ sâu
+    let depth = 2;
+    if (difficulty === 'easy') depth = 1;
+    else if (difficulty === 'hard') depth = 3;
+
     for (const move of allMoves) {
         const backBoard = board.map(row => [...row]);
         const piece = backBoard[move.from.row][move.from.col];

@@ -6,10 +6,12 @@ import { GameBoard } from "@/components/GameBoard";
 
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { GameRoomPanel } from "@/components/GameRoomPanel";
+import ChatBox from "@/components/ChatBox";
 import { aiService } from "@/services/ai.service"; 
 import { toast } from "sonner"; 
+import { Loader2, Zap } from "lucide-react";
 import { socket } from "@/lib/socket"; // Thêm client socket
-import { checkWin, checkDraw } from "@/utils/caroLogic"; // Dùng logic mới
+import { checkWin, checkDraw, getWinningLine } from "@/utils/caroLogic"; // Dùng logic mới
 import { GameOverModal } from "@/components/GameOverModal";
 import { authService } from "@/services/auth.service";
 
@@ -32,6 +34,10 @@ const CaroGame = () => {
   const [moves, setMoves] = useState([]);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [myRole, setMyRole] = useState(null); 
+  const [winningLine, setWinningLine] = useState([]); 
+  const [difficulty, setDifficulty] = useState('medium'); 
+  const [hintMove, setHintMove] = useState(null);
+  const [isHintLoading, setIsHintLoading] = useState(false);
 
   // States mới cho Socket & Modal
   const [matchId, setMatchId] = useState(null);
@@ -106,6 +112,7 @@ const CaroGame = () => {
           newBoard[moveData.row][moveData.col] = { color: moveData.color.toLowerCase() };
           
           if (checkWin(newBoard, moveData.row, moveData.col, moveData.color.toLowerCase())) {
+              setWinningLine(getWinningLine(newBoard, moveData.row, moveData.col, moveData.color.toLowerCase()));
               setIsGameOver(true);
               setModalResult("lose");
               setModalMessage("Đối thủ đã giành chiến thắng!");
@@ -184,7 +191,7 @@ const CaroGame = () => {
       setIsAiThinking(true);
       try {
           const formattedHistory = moves.map(m => ({ x: m.col, y: m.row, color: m.color }));
-          const data = await aiService.makeMove("caro", formattedHistory, [], "player2");
+          const data = await aiService.makeMove("caro", formattedHistory, [], "player2", difficulty);
           const { x, y } = data.move;
 
           if (x !== undefined && y !== undefined) {
@@ -196,8 +203,18 @@ const CaroGame = () => {
 
               // Kiểm tra AI Win
               if (checkWin(newBoard, y, x, 'white')) {
+                  setWinningLine(getWinningLine(newBoard, y, x, 'white'));
                   setIsGameOver(true);
                   toast.error("Bot đã giành chiến thắng!");
+                  return;
+              }
+
+              // KIỂM TRA HÒA
+              if (checkDraw(newBoard)) {
+                  setIsGameOver(true);
+                  setModalResult("draw");
+                  setModalMessage("Bàn cờ đã đầy! Trận đấu kết thúc với kết quả Hòa.");
+                  setIsModalOpen(true);
                   return;
               }
 
@@ -236,8 +253,21 @@ const CaroGame = () => {
     newBoard[row][col] = { color: currentColor };
     setBoard(newBoard);
 
+    setIsBlackTurn(!isBlackTurn);
+    setHintMove(null); // Xóa gợi ý khi có nước đi mới
+
+    const moveData = { color: isBlackTurn ? 'Black' : 'White', row, col };
+    setLastMove(moveData); // Highlight nước vừa đi
+    setMoves(prev => [...prev, moveData]);
+
+    // 3. Gửi nước đi lên socket khi đấu online
+    if (roomId) {
+      socket.emit("make_move", { roomId, matchId, moveData });
+    }
+
     // KIỂM TRA THẮNG
     if (checkWin(newBoard, row, col, currentColor)) {
+        setWinningLine(getWinningLine(newBoard, row, col, currentColor));
         setIsGameOver(true);
         setModalResult("win");
         setModalMessage("Bạn đã giành chiến thắng!");
@@ -251,28 +281,25 @@ const CaroGame = () => {
                 winnerId: myUserId 
             });
         }
+        return;
     } 
+
     // KIỂM TRA HÒA
-    else if (checkDraw(newBoard)) {
+    if (checkDraw(newBoard)) {
         setIsGameOver(true);
         setModalResult("draw");
-        setModalMessage("Bàn cờ đã đầy. Trận đấu hòa!");
+        setModalMessage("Bàn cờ đã đầy! Trận đấu kết thúc với kết quả Hòa.");
         setIsModalOpen(true);
 
         if (roomId) {
-            socket.emit("game_over", { roomId, matchId, result: "draw" });
+            socket.emit("game_over", { 
+                roomId, 
+                matchId, 
+                result: "draw",
+                message: "Bàn cờ đã đầy! Kết quả Hòa."
+            });
         }
-    }
-
-    setIsBlackTurn(!isBlackTurn);
-
-    const moveData = { color: isBlackTurn ? 'Black' : 'White', row, col };
-    setLastMove(moveData); // Highlight nước vừa đi
-    setMoves(prev => [...prev, moveData]);
-
-    // 3. Gửi nước đi lên socket khi đấu online
-    if (roomId) {
-      socket.emit("make_move", { roomId, matchId, moveData });
+        return;
     }
   };
 
@@ -318,6 +345,26 @@ const CaroGame = () => {
     setIsBlackTurn(true);
     setMoves([]);
     setIsGameOver(false);
+    setWinningLine([]);
+    setHintMove(null);
+  };
+
+  const handleGetHint = async () => {
+    if (isGameOver || isHintLoading || (mode === 'ai' && !isBlackTurn)) return;
+    
+    setIsHintLoading(true);
+    try {
+      const formattedHistory = moves.map(m => ({ x: m.col, y: m.row, color: m.color }));
+      const botRole = isBlackTurn ? "player1" : "player2";
+      const data = await aiService.makeMove("caro", formattedHistory, [], botRole, "hard"); // Always use hard for hint
+      setHintMove({ row: data.move.y, col: data.move.x });
+      toast.success("AI gợi ý nước đi cho bạn!");
+    } catch (error) {
+      console.error("Hint error:", error);
+      toast.error("Không thể lấy gợi ý vào lúc này.");
+    } finally {
+      setIsHintLoading(false);
+    }
   };
 
   const handleOfferDraw = () => {
@@ -368,6 +415,8 @@ const CaroGame = () => {
                 boardState={board} 
                 lastMove={lastMove} 
                 onSquareClick={handleSquareClick} 
+                winningLine={winningLine}
+                hintMove={hintMove}
               />
             </div>
 
@@ -418,7 +467,46 @@ const CaroGame = () => {
               </Card>
             )}
 
+            {/* AI Settings / Hint - Show in AI mode or if user wants hint in PvP */}
+            {((mode === 'ai') || roomId) && !isGameOver && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold leading-none">Cấp độ AI & Hỗ trợ</CardTitle>
+                </CardHeader>
+                <CardContent className="p-3 space-y-3">
+                  {mode === 'ai' && (
+                    <select 
+                      className="w-full p-2 border rounded-md text-sm bg-background/50 accent-primary"
+                      value={difficulty}
+                      onChange={(e) => setDifficulty(e.target.value)}
+                    >
+                      <option value="easy">Dễ</option>
+                      <option value="medium">Trung bình</option>
+                      <option value="hard">Khó</option>
+                    </select>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full h-8 text-xs gap-2"
+                    onClick={handleGetHint}
+                    disabled={isHintLoading || (roomId && currentTurnUserId !== myUserId) || (mode === 'ai' && !isBlackTurn)}
+                  >
+                    {isHintLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-amber-500" />}
+                    Gợi ý nước đi
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {code && <GameRoomPanel code={code} roomId={roomId} />}
+            
+            {roomId && (
+               <div className="flex-1 min-h-0">
+                  <ChatBox roomId={roomId} currentUserId={myUserId} />
+               </div>
+            )}
+            
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Move History</CardTitle>

@@ -1,12 +1,36 @@
 const jwt = require("jsonwebtoken");
-const { User, UserStats, MatchmakingQueue } = require("../models");
+const { User, UserStats, MatchmakingQueue, Friend } = require("../models");
 const matchmakingHandler = require("./matchmakingHandler");
 const gameHandler = require("./gameHandler");
 
 // Quản lý người dùng đang online { userId: socketId }
 const onlineUsers = new Map();
+// Quản lý người dùng đang trong trận { userId: roomId }
+const inGameUsers = new Map();
 
 module.exports = (io) => {
+    // Helper function để gửi thông báo trạng thái tới bạn bè
+    const broadcastStatusToFriends = async (userId, status) => {
+        try {
+            const friends = await Friend.findAll({
+                where: { user_id: userId, status: "accepted" },
+                attributes: ['friend_id']
+            });
+
+            friends.forEach(f => {
+                const friendSocketId = onlineUsers.get(f.friend_id);
+                if (friendSocketId) {
+                    io.to(friendSocketId).emit("friend_status_changed", {
+                        userId: userId,
+                        status: status // "online", "offline", "in_game"
+                    });
+                }
+            });
+        } catch (err) {
+            console.error("[Socket] Broadcast status error:", err.message);
+        }
+    };
+
     // Middleware xác thực kết nối Socket.IO
     io.use(async (socket, next) => {
         try {
@@ -26,11 +50,11 @@ module.exports = (io) => {
                 return next(new Error("Authentication error: User not found"));
             }
 
-            // Lưu user info vào socket session (ELO không có trực tiếp trên User, default 1000)
+            // Lưu user info vào socket session
             socket.user = {
                 id: user.user_id,
                 username: user.username,
-                elo: 1000 // ELO nằm ở bảng user_game_stats (theo từng game), dùng 1000 làm default
+                elo: 1000 
             };
 
             next();
@@ -43,19 +67,18 @@ module.exports = (io) => {
     io.on("connection", (socket) => {
         console.log(`[Socket] Connected: ${socket.user.username} (${socket.id})`);
 
-        // Đăng ký user online
         onlineUsers.set(socket.user.id, socket.id);
+        broadcastStatusToFriends(socket.user.id, "online");
 
-        // Khởi tạo các event handler
         matchmakingHandler(io, socket, onlineUsers);
-        gameHandler(io, socket, onlineUsers);
+        gameHandler(io, socket, onlineUsers, inGameUsers, broadcastStatusToFriends);
 
-        // Xử lý khi ngắt kết nối: xóa khỏi matchmaking queue
         socket.on("disconnect", async () => {
             console.log(`[Socket] Disconnected: ${socket.user.username}`);
             onlineUsers.delete(socket.user.id);
+            inGameUsers.delete(socket.user.id);
+            broadcastStatusToFriends(socket.user.id, "offline");
 
-            // Xóa khỏi hàng chờ matchmaking nếu đang tìm trận
             try {
                 await MatchmakingQueue.destroy({ where: { user_id: socket.user.id } });
             } catch (err) {
@@ -63,4 +86,6 @@ module.exports = (io) => {
             }
         });
     });
+
+    return { onlineUsers, inGameUsers };
 };

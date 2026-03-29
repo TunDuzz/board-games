@@ -91,6 +91,19 @@ const sendGameInvite = async (req, res) => {
             invite: inviteWithDetails
         });
 
+        // Gửi thông báo socket real-time nếu người nhận online
+        const io = req.app.get("io");
+        const users = req.app.get("onlineUsers");
+        
+        if (io && users) {
+            const recipientSocketId = users.get(to_user_id);
+            if (recipientSocketId) {
+                io.to(recipientSocketId).emit("game_invite_received", {
+                    invite: inviteWithDetails
+                });
+            }
+        }
+
     } catch (error) {
         res.status(500).json({ message: "Lỗi server!", error: error.message });
     }

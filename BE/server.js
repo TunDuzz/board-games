@@ -20,7 +20,12 @@ const io = new Server(server, {
 
 // Import socket setup logic
 const setupSocket = require("./src/socket");
-setupSocket(io);
+const { onlineUsers, inGameUsers } = setupSocket(io);
+
+// Chia sẻ io instance để dùng trong controllers
+app.set("io", io);
+app.set("onlineUsers", onlineUsers);
+app.set("inGameUsers", inGameUsers);
 
 app.get("/", (req, res) => {
   res.json({ message: "Game Backend & Socket Running 🚀" });
@@ -35,4 +40,8 @@ sequelize.authenticate()
   .catch(err => console.error("DB Error ", err));
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log("Server running on port " + PORT));
+server.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+  console.log("DB_NAME:", process.env.DB_NAME);
+  console.log("DB_USER:", process.env.DB_USER);
+});

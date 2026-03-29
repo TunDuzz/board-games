@@ -7,6 +7,7 @@ import { Loader2, Search, UserPlus, UserMinus, Check, X, ShieldAlert } from "luc
 import { friendService } from "@/services/friend.service";
 import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner"; // Using sonner as it seems configured
+import { socket } from "@/lib/socket";
 
 const Friends = () => {
     const [activeTab, setActiveTab] = useState("friends");
@@ -21,6 +22,24 @@ const Friends = () => {
     useEffect(() => {
         fetchData();
     }, [activeTab]);
+
+    useEffect(() => {
+        // Kết nối socket nếu chưa kết nối
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        // Lắng nghe sự kiện thay đổi trạng thái bạn bè
+        socket.on("friend_status_changed", ({ userId, status }) => {
+            setFriends(prev => prev.map(friend => 
+                friend.user_id === userId ? { ...friend, status } : friend
+            ));
+        });
+
+        return () => {
+            socket.off("friend_status_changed");
+        };
+    }, []);
 
     const fetchData = async () => {
         setLoading(true);
@@ -148,14 +167,25 @@ const Friends = () => {
                                 <Card key={friend.user_id} className="hover:shadow-sm transition-shadow">
                                     <CardContent className="flex items-center justify-between p-4">
                                         <div className="flex items-center gap-3">
-                                            <Avatar className="h-10 w-10">
-                                                <AvatarImage src={friend.avatar_url} />
-                                                <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                    {(friend.full_name || friend.username).slice(0, 2).toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <div className="relative">
+                                                <Avatar className="h-10 w-10">
+                                                    <AvatarImage src={friend.avatar_url} />
+                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                        {(friend.full_name || friend.username).slice(0, 2).toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                {/* Status Indicator */}
+                                                <span className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-background z-10 ${
+                                                    friend.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                                                }`} title={friend.status === 'online' ? 'Đang online' : 'Ngoại tuyến'} />
+                                            </div>
                                             <div>
-                                                <p className="font-semibold">{friend.full_name || friend.username}</p>
+                                                <p className="font-semibold flex items-center gap-2">
+                                                    {friend.full_name || friend.username}
+                                                    {friend.status === 'online' && (
+                                                        <span className="text-[10px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Online</span>
+                                                    )}
+                                                </p>
                                                 <p className="text-xs text-muted-foreground">@{friend.username}</p>
                                             </div>
                                         </div>

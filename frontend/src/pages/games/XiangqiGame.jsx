@@ -5,10 +5,12 @@ import { PlayerInfoBar } from "@/components/PlayerInfoBar";
 import { getStrictValidMoves, isInCheck, isCheckmate } from "@/utils/xiangqiLogic";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { GameRoomPanel } from "@/components/GameRoomPanel";
+import ChatBox from "@/components/ChatBox";
 import { GameBoard } from "@/components/GameBoard";
 import { socket } from "@/lib/socket"; 
 import { aiService } from "@/services/ai.service";
 import { toast } from "sonner";
+import { Loader2, Zap } from "lucide-react";
 import { GameOverModal } from "@/components/GameOverModal";
 import { authService } from "@/services/auth.service";
 
@@ -84,6 +86,9 @@ const XiangqiGame = () => {
   const [myRole, setMyRole] = useState(null); 
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [difficulty, setDifficulty] = useState('medium'); 
+  const [hintMove, setHintMove] = useState(null);
+  const [isHintLoading, setIsHintLoading] = useState(false);
 
   const [matchId, setMatchId] = useState(null);
   const [currentTurnUserId, setCurrentTurnUserId] = useState(null);
@@ -213,8 +218,9 @@ const XiangqiGame = () => {
 
   const fetchAiMove = async () => {
       setIsAiThinking(true);
+      setHintMove(null);
       try {
-          const data = await aiService.makeMove("xiangqi", board, [], "player2");
+          const data = await aiService.makeMove("xiangqi", board, [], "player2", difficulty);
           const moveResult = data.move; 
 
           if (moveResult && moveResult.from && moveResult.to) {
@@ -320,6 +326,7 @@ const XiangqiGame = () => {
     setTurn(prev => prev === 'red' ? 'black' : 'red');
     setSelectedSquare(null);
     setValidMoves([]);
+    setHintMove(null);
   };
 
   useEffect(() => {
@@ -359,6 +366,25 @@ const XiangqiGame = () => {
     setValidMoves([]);
     setHistory([]);
     setIsGameOver(false);
+    setLastMove(null);
+    setHintMove(null);
+  };
+
+  const handleGetHint = async () => {
+    if (isGameOver || isHintLoading || (mode === 'ai' && turn === 'black')) return;
+    
+    setIsHintLoading(true);
+    try {
+      const botRole = turn === 'red' ? "player1" : "player2";
+      const data = await aiService.makeMove("xiangqi", board, [], botRole, "hard");
+      setHintMove(data.move);
+      toast.success("AI gợi ý nước đi cho bạn!");
+    } catch (error) {
+      console.error("Hint error:", error);
+      toast.error("Không thể lấy gợi ý vào lúc này.");
+    } finally {
+      setIsHintLoading(false);
+    }
   };
 
   const handleOfferDraw = () => {
@@ -412,6 +438,7 @@ const XiangqiGame = () => {
                 selectedSquare={selectedSquare}
                 validMoves={validMoves}
                 lastMove={lastMove}
+                hintMove={hintMove}
                 flipped={myRole === 'player2'}
                 onSquareClick={handleSquareClick}
               />
@@ -441,7 +468,48 @@ const XiangqiGame = () => {
                </Card>
             )}
             
+            {!isGameOver && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold leading-none flex items-center gap-2">
+                    <Zap className="h-3 w-3 text-amber-500" />
+                    Hỗ trợ AI
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-3 space-y-3">
+                  {mode === 'ai' && (
+                    <select 
+                      className="w-full p-2 border rounded-md text-sm bg-background/50 accent-primary"
+                      value={difficulty}
+                      onChange={(e) => setDifficulty(e.target.value)}
+                    >
+                      <option value="easy">Dễ</option>
+                      <option value="medium">Trung bình</option>
+                      <option value="hard">Khó</option>
+                    </select>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full h-8 text-xs gap-2"
+                    onClick={handleGetHint}
+                    disabled={isHintLoading || (roomId && currentTurnUserId !== myUserId) || (mode === 'ai' && turn === 'black')}
+                  >
+                    {isHintLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-amber-500" />}
+                    Gợi ý nước đi
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            
             {code && <GameRoomPanel code={code} roomId={roomId} />}
+
+            {roomId && (
+               <div className="flex-1 min-h-0">
+                  <ChatBox roomId={roomId} currentUserId={myUserId} />
+               </div>
+            )}
+            
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Move History</CardTitle>

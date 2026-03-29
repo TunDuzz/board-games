@@ -1,6 +1,7 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
+import { GlobalNotificationListener } from "./GlobalNotificationListener";
 
 export function AppLayout({ children }) {
   // Read sidebar state from cookie on initial load
@@ -13,6 +14,7 @@ export function AppLayout({ children }) {
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
+      <GlobalNotificationListener />
       <div className="flex h-screen w-full overflow-hidden">
         <AppSidebar />
         <main className="flex-1 overflow-auto p-6">

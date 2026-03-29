@@ -3,7 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { userService } from "@/services/user.service";
 import { gameTypeLabels } from "@/data/mock";
-import { Loader2 } from "lucide-react";
+import { Loader2, PlayCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const resultColors = {
   win: "bg-emerald-100 text-emerald-700",
@@ -12,6 +14,7 @@ const resultColors = {
 };
 
 const MatchHistory = () => {
+  const navigate = useNavigate();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,9 +32,13 @@ const MatchHistory = () => {
     fetchHistory();
   }, []);
 
+  const handleReplay = (matchId) => {
+    navigate(`/replay/${matchId}`);
+  };
+
   if (loading) {
     return (
-      <div className="flex justify-center p-8"><span className="animate-spin">⌛</span></div>
+      <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
     )
   }
 
@@ -44,22 +51,30 @@ const MatchHistory = () => {
           <CardContent className="p-0">
             <div className="divide-y">
               {matches.map((match) => {
-                const isWin = match.result === "win"; // Adjust based on BE response
+                const matchId = match.match_id || match.id;
                 return (
-                  <div key={match.id} className="flex items-center justify-between px-5 py-4">
+                  <div key={matchId} className="flex items-center justify-between px-5 py-4">
                     <div className="flex items-center gap-3">
                       <Badge variant="secondary" className="text-xs font-normal">
-                        {gameTypeLabels[match.game_type] || match.game_type}
+                        {gameTypeLabels[match.game_type_id] || match.game_type_id}
                       </Badge>
-                      <span className="text-sm">Trận đấu kết thúc vào {new Date(match.end_time).toLocaleString()}</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">Trận đấu ngày {new Date(match.end_time || match.created_at).toLocaleDateString()}</span>
+                        <span className="text-xs text-muted-foreground">{new Date(match.end_time || match.created_at).toLocaleTimeString()}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${resultColors[match.result] || "bg-gray-100"}`}>
                         {match.result ? match.result.charAt(0).toUpperCase() + match.result.slice(1) : "Unknown"}
                       </span>
-                      <span className={`text-xs font-medium ${match.rating_change > 0 ? "text-emerald-600" : match.rating_change < 0 ? "text-red-500" : "text-muted-foreground"}`}>
-                        {match.rating_change > 0 ? "+" : ""}{match.rating_change}
-                      </span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-8 gap-1.5 text-xs"
+                        onClick={() => handleReplay(matchId)}
+                      >
+                        <PlayCircle className="h-3.5 w-3.5" /> Xem lại
+                      </Button>
                     </div>
                   </div>
                 );

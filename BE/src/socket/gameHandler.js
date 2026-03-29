@@ -4,7 +4,7 @@ const { Room, RoomPlayer, Match, Move } = require("../models");
 // Interface: { roomId: { currentTurn: userId, moveCount: 0, player1Id, player2Id } }
 const roomTurnState = new Map();
 
-module.exports = (io, socket, onlineUsers) => {
+module.exports = (io, socket, onlineUsers, inGameUsers, broadcastStatusToFriends) => {
 
     // ===================================
     // JOIN VÀO PHÒNG SOCKET
@@ -12,6 +12,10 @@ module.exports = (io, socket, onlineUsers) => {
     socket.on("join_game_room", async ({ roomId }) => {
         try {
             const userId = socket.user.id;
+
+            // Đánh dấu user đang trong phòng game
+            inGameUsers.set(userId, roomId);
+            broadcastStatusToFriends(userId, "in_game");
 
             // Xác minh User là thành viên hợp lệ
             const playerRecord = await RoomPlayer.findOne({
@@ -432,6 +436,10 @@ module.exports = (io, socket, onlineUsers) => {
             // Thoát socket.join
             socket.leave(roomKey);
             delete socket.currentRoomId;
+
+            // Xóa trạng thái in_game
+            inGameUsers.delete(userId);
+            broadcastStatusToFriends(userId, "online");
 
         } catch (error) {
             console.error("[Game] leave_room error:", error);

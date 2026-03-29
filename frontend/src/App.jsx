@@ -9,6 +9,7 @@ import Dashboard from "./pages/dashboard/Dashboard";
 import ChessGame from "./pages/games/ChessGame";
 import XiangqiGame from "./pages/games/XiangqiGame";
 import CaroGame from "./pages/games/CaroGame";
+import ReplayGame from "./pages/games/ReplayGame";
 import Profile from "./pages/user/Profile";
 import MatchHistory from "./pages/user/MatchHistory";
 import Rankings from "./pages/user/Rankings";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/game/chess" element={<ChessGame />} />
             <Route path="/game/xiangqi" element={<XiangqiGame />} />
             <Route path="/game/caro" element={<CaroGame />} />
+            <Route path="/replay/:matchId" element={<ReplayGame />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/history" element={<MatchHistory />} />
             <Route path="/rankings" element={<Rankings />} />
