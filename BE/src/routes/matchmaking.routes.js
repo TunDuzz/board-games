@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const matchmakingController = require("../controllers/matchmaking.controller");
-const verifyToken = require("../middleware/auth.middleware");
+const { verifyToken } = require("../middleware/auth.middleware");
 
 // Cần xác thực user
 router.use(verifyToken);

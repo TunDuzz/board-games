@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { getProfile, updateProfile, getMatchHistory, getRankings, getMatchMoves } = require("../controllers/user.controller");
-const verifyToken = require("../middleware/auth.middleware");
+const { verifyToken } = require("../middleware/auth.middleware");
 
 // Tất cả các route này đều cần đăng nhập
 router.use(verifyToken);

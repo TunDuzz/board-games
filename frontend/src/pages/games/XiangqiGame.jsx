@@ -10,9 +10,13 @@ import { GameBoard } from "@/components/GameBoard";
 import { socket } from "@/lib/socket"; 
 import { aiService } from "@/services/ai.service";
 import { toast } from "sonner";
-import { Loader2, Zap } from "lucide-react";
+import { Loader2, Zap, RotateCcw } from "lucide-react";
 import { GameOverModal } from "@/components/GameOverModal";
 import { authService } from "@/services/auth.service";
+import { useGameTheme } from "@/hooks/useGameTheme.jsx";
+import { ThemeSelector } from "@/components/ThemeSelector";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import confetti from "canvas-confetti";
 
 const formatTime = (secs) => {
   const mins = Math.floor(secs / 60);
@@ -85,6 +89,7 @@ const XiangqiGame = () => {
 
   const [myRole, setMyRole] = useState(null); 
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const { boardTheme, pieceSkin, themeConfig } = useGameTheme();
   const [isGameOver, setIsGameOver] = useState(false);
   const [difficulty, setDifficulty] = useState('medium'); 
   const [hintMove, setHintMove] = useState(null);
@@ -183,6 +188,7 @@ const XiangqiGame = () => {
       });
 
       socket.on("receive_game_over", ({ result, winnerId, message }) => {
+          confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
           setIsGameOver(true);
           
           if (result === "draw") {
@@ -197,14 +203,28 @@ const XiangqiGame = () => {
           setIsModalOpen(true);
       });
 
+      socket.on("undo_executed", ({ currentTurn }) => {
+        handleUndo();
+        setCurrentTurnUserId(currentTurn);
+        toast.success("Nước đi đã được thu hồi.");
+      });
+
+      socket.on("undo_rejected", ({ message }) => {
+        toast.error(message);
+      });
+
       return () => {
         socket.off("game_room_joined");
+        socket.off("player_joined");
         socket.off("match_started");
         socket.off("turn_changed");
         socket.off("receive_move");
         socket.off("receive_draw_offer");
         socket.off("draw_rejected");
+        socket.off("receive_time_limit");
         socket.off("receive_game_over");
+        socket.off("undo_executed");
+        socket.off("undo_rejected");
         socket.disconnect();
       };
     }
@@ -282,6 +302,7 @@ const XiangqiGame = () => {
     setLastMove({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } });
 
     if (capturedGeneral) {
+        confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
         setIsGameOver(true);
         setModalResult("win");
         setModalMessage(`Chiến thắng! Bạn đã ăn Tướng của đối phương!`);
@@ -293,6 +314,7 @@ const XiangqiGame = () => {
     } else {
         const nextTurn = turn === 'red' ? 'black' : 'red';
         if (isCheckmate(newBoard, nextTurn)) {
+            confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
             setIsGameOver(true);
             setModalResult("win");
             setModalMessage("Chiếu sát! Bạn đã giành chiến thắng!");
@@ -319,6 +341,7 @@ const XiangqiGame = () => {
         piece, 
         from: { row: fromRow, col: fromCol }, 
         to: { row: toRow, col: toCol }, 
+        captured: targetPiece,
         desc
     }]);
 
@@ -350,6 +373,7 @@ const XiangqiGame = () => {
   }, [matchId, isGameOver, turn]);
 
   const handleTimeout = (timeLeftRole) => {
+      confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
       setIsGameOver(true);
       const amIPlayer1 = myRole === "player1";
       const isLose = (timeLeftRole === "player1" && amIPlayer1) || (timeLeftRole === "player2" && !amIPlayer1);
@@ -409,6 +433,39 @@ const XiangqiGame = () => {
     }
   };
 
+  const handleRequestUndo = () => {
+    if (isGameOver || history.length === 0) return;
+    
+    if (mode === 'ai') {
+        handleUndo(); 
+        if (isAiThinking) return;
+        handleUndo(); 
+        toast.success("Đã lùi lại nước đi.");
+    } else if (roomId) {
+        socket.emit("request_undo", { roomId });
+        toast.info("Đã gửi yêu cầu đi lại.");
+    }
+  };
+
+  const handleUndo = () => {
+    setHistory(prev => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        const newHistory = prev.slice(0, -1);
+        
+        setBoard(currentBoard => {
+            const newBoard = currentBoard.map(r => [...r]);
+            newBoard[last.from.row][last.from.col] = last.piece;
+            newBoard[last.to.row][last.to.col] = last.captured || null;
+            return newBoard;
+        });
+
+        setTurn(last.piece.color);
+        setLastMove(newHistory.length > 0 ? newHistory[newHistory.length-1] : null);
+        return newHistory;
+    });
+  };
+
   const movePairs = [];
   for (let i = 0; i < history.length; i += 2) {
     movePairs.push({
@@ -441,6 +498,8 @@ const XiangqiGame = () => {
                 hintMove={hintMove}
                 flipped={myRole === 'player2'}
                 onSquareClick={handleSquareClick}
+                theme={themeConfig}
+                skin={pieceSkin}
               />
             </div>
 
@@ -453,7 +512,7 @@ const XiangqiGame = () => {
             </div>
           </div>
 
-          <div className="w-full lg:w-64 space-y-4">
+          <div className="w-full lg:w-72 flex flex-col gap-4 overflow-y-auto max-h-[calc(100vh-120px)] pr-2 scrollbar-thin">
             {roomId && (
                <Card className="bg-primary/5 border-primary/20">
                  <CardContent className="p-3 text-center font-medium">
@@ -502,10 +561,53 @@ const XiangqiGame = () => {
               </Card>
             )}
             
+            <Card className="border-primary/20 bg-primary/5">
+              <Tabs defaultValue="history" className="w-full">
+                <CardHeader className="pb-0 px-2">
+                  <TabsList className="grid w-full grid-cols-2 h-8">
+                    <TabsTrigger value="history" className="text-[10px]">Lịch sử</TabsTrigger>
+                    <TabsTrigger value="themes" className="text-[10px]">Giao diện</TabsTrigger>
+                  </TabsList>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <TabsContent value="history" className="mt-0">
+                    <div className="max-h-64 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-muted-foreground text-[11px]">
+                            <th className="px-3 py-2 text-left font-medium">#</th>
+                            <th className="px-3 py-2 text-left font-medium">Đỏ</th>
+                            <th className="px-3 py-2 text-left font-medium">Đen</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {movePairs.map((pair, idx) => (
+                            <tr key={idx} className="border-b last:border-0 hover:bg-accent/50">
+                              <td className="px-3 py-1 text-muted-foreground text-[11px]">{pair.num}</td>
+                              <td className="px-3 py-1 font-medium text-[11px]">{pair.red}</td>
+                              <td className="px-3 py-1 font-medium text-[11px]">{pair.black}</td>
+                            </tr>
+                          ))}
+                          {movePairs.length === 0 && (
+                            <tr className="border-b last:border-0">
+                              <td className="px-3 py-4 text-center text-muted-foreground text-[11px]" colSpan={3}>Bắt đầu chơi...</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="themes" className="mt-0 p-3">
+                    <ThemeSelector />
+                  </TabsContent>
+                </CardContent>
+              </Tabs>
+            </Card>
+
             {code && <GameRoomPanel code={code} roomId={roomId} />}
 
             {roomId && (
-               <div className="flex-1 min-h-0">
+               <div className="flex-shrink-0 h-[300px]">
                   <ChatBox roomId={roomId} currentUserId={myUserId} />
                </div>
             )}
@@ -539,7 +641,12 @@ const XiangqiGame = () => {
             </Card>
 
             <div className="flex flex-col gap-2">
-              <Button variant="outline" size="sm" className="w-full" onClick={resetGame}>New Game</Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" className="w-full" onClick={resetGame}>New Game</Button>
+                <Button variant="outline" size="sm" className="w-full gap-1" onClick={handleRequestUndo} disabled={history.length === 0 || isGameOver}>
+                  <RotateCcw className="h-3 w-3" /> Đi lại
+                </Button>
+              </div>
               <Button variant="outline" size="sm" className="w-full" onClick={handleOfferDraw}>Offer Draw</Button>
               <Button variant="destructive" size="sm" className="w-full" onClick={handleResign}>Resign</Button>
               <Button variant="secondary" size="sm" className="w-full" onClick={() => {

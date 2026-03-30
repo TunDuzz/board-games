@@ -26,6 +26,7 @@ app.use("/api/invites", gameInviteRoutes);
 app.use("/api/rooms", require("./routes/room.routes"));
 app.use("/api/matchmaking", require("./routes/matchmaking.routes"));
 app.use("/api/ai", require("./routes/ai.routes"));
+app.use("/api/feedback", require("./routes/feedback.routes"));
 
 
 // Test route
