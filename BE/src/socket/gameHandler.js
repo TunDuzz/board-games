@@ -447,6 +447,59 @@ module.exports = (io, socket, onlineUsers, inGameUsers, broadcastStatusToFriends
     });
 
     // ===================================
+    // ĐI LẠI (Undo / Takeback)
+    // ===================================
+    socket.on("request_undo", ({ roomId }) => {
+        const roomKey = `game_room_${roomId}`;
+        socket.to(roomKey).emit("undo_request_received", {
+            userId: socket.user.id,
+            username: socket.user.username
+        });
+    });
+
+    socket.on("accept_undo", async ({ roomId, matchId }) => {
+        try {
+            const roomKey = `game_room_${roomId}`;
+            const turnState = roomTurnState.get(roomId);
+
+            if (turnState && turnState.moveCount > 0) {
+                // 1. Lùi moveCount
+                turnState.moveCount--;
+                
+                // 2. Trả lại lượt cho người vừa đi (người yêu cầu undo)
+                // currentTurn hiện tại là người ĐỒNG Ý undo.
+                // Trả lại cho người YÊU CẦU undo.
+                const requesterId = turnState.currentTurn === turnState.player1Id 
+                    ? turnState.player2Id 
+                    : turnState.player1Id;
+                
+                turnState.currentTurn = requesterId;
+
+                // 3. Xóa nước đi cuối trong buffer
+                if (turnState.moves_buffer.length > 0) {
+                    turnState.moves_buffer.pop();
+                }
+
+                // 4. Broadcast cho cả phòng thực hiện undo
+                io.to(roomKey).emit("undo_executed", {
+                    currentTurn: requesterId,
+                    moveCount: turnState.moveCount
+                });
+            }
+        } catch (error) {
+            console.error("[Game] accept_undo error:", error);
+        }
+    });
+
+    socket.on("reject_undo", ({ roomId }) => {
+        const roomKey = `game_room_${roomId}`;
+        socket.to(roomKey).emit("undo_rejected", {
+            username: socket.user.username,
+            message: "Đối thủ từ chối cho bạn đi lại."
+        });
+    });
+
+    // ===================================
     // XỬ LÝ NGẮT KẾT NỐI KHI ĐANG CHƠI
     // ===================================
     socket.on("disconnect", () => {

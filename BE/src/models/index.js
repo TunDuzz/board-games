@@ -13,6 +13,7 @@ const Chat = require("./chat.model");
 const GameInvite = require("./gameInvite.model");
 const MatchmakingQueue = require("./matchmakingQueue.model");
 const RoomPlayer = require("./roomPlayer.model");
+const Feedback = require("./feedback.model");
 
 
 User.hasOne(UserStats, { foreignKey: "user_id" });
@@ -66,6 +67,9 @@ RoomPlayer.belongsTo(User, { foreignKey: "user_id" });
 Room.hasMany(RoomPlayer, { foreignKey: "room_id" });
 User.hasMany(RoomPlayer, { foreignKey: "user_id" });
 
+Feedback.belongsTo(User, { foreignKey: "user_id", as: "user" });
+User.hasMany(Feedback, { foreignKey: "user_id", as: "feedbacks" });
+
 // Friend relationships
 Friend.belongsTo(User, { as: "user", foreignKey: "user_id" });
 Friend.belongsTo(User, { as: "friendUser", foreignKey: "friend_id" });
@@ -89,4 +93,5 @@ module.exports = {
   GameInvite,
   MatchmakingQueue,
   RoomPlayer,
+  Feedback,
 };

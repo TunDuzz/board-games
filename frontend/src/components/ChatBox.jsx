@@ -117,7 +117,7 @@ const ChatBox = ({ roomId, currentUserId }) => {
                 )}
                 <div 
                     ref={scrollRef}
-                    className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-primary/20"
+                    className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin"
                 >
                     {messages.length === 0 && (
                         <p className="text-[10px] text-center text-muted-foreground italic py-4">
