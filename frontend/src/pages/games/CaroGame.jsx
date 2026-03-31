@@ -9,11 +9,15 @@ import { GameRoomPanel } from "@/components/GameRoomPanel";
 import ChatBox from "@/components/ChatBox";
 import { aiService } from "@/services/ai.service"; 
 import { toast } from "sonner"; 
-import { Loader2, Zap } from "lucide-react";
+import { Loader2, Zap, RotateCcw } from "lucide-react";
 import { socket } from "@/lib/socket"; // Thêm client socket
 import { checkWin, checkDraw, getWinningLine } from "@/utils/caroLogic"; // Dùng logic mới
 import { GameOverModal } from "@/components/GameOverModal";
 import { authService } from "@/services/auth.service";
+import { useGameTheme } from "@/hooks/useGameTheme.jsx";
+import { ThemeSelector } from "@/components/ThemeSelector";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import confetti from "canvas-confetti";
 
 const formatTime = (secs) => {
   const mins = Math.floor(secs / 60);
@@ -28,6 +32,8 @@ const CaroGame = () => {
   const code = searchParams.get('code');
   const mode = searchParams.get('mode'); 
 
+  const { boardTheme, pieceSkin, themeConfig } = useGameTheme();
+  
   const [isGameOver, setIsGameOver] = useState(false);
   const [board, setBoard] = useState(Array(15).fill(null).map(() => Array(15).fill(null)));
   const [isBlackTurn, setIsBlackTurn] = useState(true);
@@ -150,6 +156,7 @@ const CaroGame = () => {
       });
 
       socket.on("receive_game_over", ({ result, winnerId, message }) => {
+          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
           setIsGameOver(true);
           
           if (result === "draw") {
@@ -165,14 +172,28 @@ const CaroGame = () => {
           setIsModalOpen(true);
       });
 
+      socket.on("undo_executed", ({ currentTurn }) => {
+        handleUndo();
+        setCurrentTurnUserId(currentTurn);
+        toast.success("Nước đi đã được thu hồi.");
+      });
+
+      socket.on("undo_rejected", ({ message }) => {
+        toast.error(message);
+      });
+
       return () => {
         socket.off("game_room_joined");
+        socket.off("player_joined");
         socket.off("match_started");
         socket.off("turn_changed");
         socket.off("receive_move");
         socket.off("receive_draw_offer");
         socket.off("draw_rejected");
+        socket.off("receive_time_limit");
         socket.off("receive_game_over");
+        socket.off("undo_executed");
+        socket.off("undo_rejected");
         socket.disconnect();
       };
     }
@@ -204,6 +225,7 @@ const CaroGame = () => {
               // Kiểm tra AI Win
               if (checkWin(newBoard, y, x, 'white')) {
                   setWinningLine(getWinningLine(newBoard, y, x, 'white'));
+                  confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
                   setIsGameOver(true);
                   toast.error("Bot đã giành chiến thắng!");
                   return;
@@ -268,6 +290,7 @@ const CaroGame = () => {
     // KIỂM TRA THẮNG
     if (checkWin(newBoard, row, col, currentColor)) {
         setWinningLine(getWinningLine(newBoard, row, col, currentColor));
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         setIsGameOver(true);
         setModalResult("win");
         setModalMessage("Bạn đã giành chiến thắng!");
@@ -327,6 +350,7 @@ const CaroGame = () => {
   }, [matchId, isGameOver, isBlackTurn]);
 
   const handleTimeout = (timeLeftRole) => {
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
       setIsGameOver(true);
       const amIPlayer1 = myRole === "player1";
       const isLose = (timeLeftRole === "player1" && amIPlayer1) || (timeLeftRole === "player2" && !amIPlayer1);
@@ -399,6 +423,40 @@ const CaroGame = () => {
     });
   }
 
+  const handleRequestUndo = () => {
+    if (isGameOver || moves.length === 0) return;
+    
+    if (mode === 'ai') {
+        // Nếu chơi với máy, lùi 2 nước (nếu máy vừa đi) hoặc 1 nước (nếu mình vừa đi)
+        handleUndo(); // Lùi nước của máy
+        if (isAiThinking) return; // Đang nghĩ thì ko undo được
+        handleUndo(); // Lùi nước của mình
+        toast.success("Đã lùi lại nước đi.");
+    } else if (roomId) {
+        socket.emit("request_undo", { roomId });
+        toast.info("Đã gửi yêu cầu đi lại.");
+    }
+  };
+
+  const handleUndo = () => {
+    setMoves(prev => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        const newMoves = prev.slice(0, -1);
+        
+        setBoard(currentBoard => {
+            const newBoard = currentBoard.map(r => [...r]);
+            newBoard[last.row][last.col] = null;
+            return newBoard;
+        });
+
+        setIsBlackTurn(last.color.toLowerCase() === 'black');
+        setLastMove(newMoves.length > 0 ? newMoves[newMoves.length - 1] : null);
+        setWinningLine([]);
+        return newMoves;
+    });
+  };
+
   return (
     <>
       <div className="h-full flex flex-col p-4">
@@ -410,14 +468,16 @@ const CaroGame = () => {
             </div>
 
             <div className="flex-1 min-h-0 relative">
-              <GameBoard 
-                gameType="caro" 
-                boardState={board} 
-                lastMove={lastMove} 
-                onSquareClick={handleSquareClick} 
-                winningLine={winningLine}
-                hintMove={hintMove}
-              />
+                <GameBoard 
+                  gameType="caro" 
+                  boardState={board} 
+                  lastMove={lastMove} 
+                  onSquareClick={handleSquareClick} 
+                  winningLine={winningLine}
+                  hintMove={hintMove}
+                  theme={themeConfig}
+                  skin={pieceSkin}
+                />
             </div>
 
             <div className="shrink-0">
@@ -426,7 +486,7 @@ const CaroGame = () => {
           </div>
 
           {/* Side Panel */}
-          <div className="w-full lg:w-64 space-y-4">
+          <div className="w-full lg:w-72 flex flex-col gap-4 overflow-y-auto max-h-[calc(100vh-120px)] pr-2 scrollbar-thin">
             {roomId && (
                <Card className="bg-primary/5 border-primary/20">
                  <CardContent className="p-3 text-center font-medium">
@@ -499,49 +559,65 @@ const CaroGame = () => {
               </Card>
             )}
 
+            <Card className="border-primary/20 bg-primary/5">
+              <Tabs defaultValue="history" className="w-full">
+                <CardHeader className="pb-0 px-2">
+                  <TabsList className="grid w-full grid-cols-2 h-8">
+                    <TabsTrigger value="history" className="text-[10px]">Lịch sử</TabsTrigger>
+                    <TabsTrigger value="themes" className="text-[10px]">Giao diện</TabsTrigger>
+                  </TabsList>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <TabsContent value="history" className="mt-0">
+                    <div className="max-h-64 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-muted-foreground text-[11px]">
+                            <th className="px-3 py-2 text-left font-medium">#</th>
+                            <th className="px-3 py-2 text-left font-medium">Black</th>
+                            <th className="px-3 py-2 text-left font-medium">White</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {movePairs.map((pair, idx) => (
+                            <tr key={idx} className="border-b last:border-0 hover:bg-accent/50">
+                              <td className="px-3 py-1 text-muted-foreground text-[11px]">{pair.num}</td>
+                              <td className="px-3 py-1 font-medium text-[11px]">{pair.black}</td>
+                              <td className="px-3 py-1 font-medium text-[11px]">{pair.white}</td>
+                            </tr>
+                          ))}
+                          {movePairs.length === 0 && (
+                            <tr className="border-b last:border-0">
+                              <td className="px-3 py-4 text-center text-muted-foreground text-[11px]" colSpan={3}>Bắt đầu chơi...</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="themes" className="mt-0 p-3">
+                    <ThemeSelector />
+                  </TabsContent>
+                </CardContent>
+              </Tabs>
+            </Card>
+
             {code && <GameRoomPanel code={code} roomId={roomId} />}
             
             {roomId && (
-               <div className="flex-1 min-h-0">
+               <div className="flex-shrink-0 h-[300px]">
                   <ChatBox roomId={roomId} currentUserId={myUserId} />
                </div>
             )}
             
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Move History</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-muted-foreground">
-                        <th className="px-4 py-2 text-left font-medium">#</th>
-                        <th className="px-4 py-2 text-left font-medium">Black</th>
-                        <th className="px-4 py-2 text-left font-medium">White</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {movePairs.map((pair, idx) => (
-                        <tr key={idx} className="border-b last:border-0 hover:bg-accent/50">
-                          <td className="px-4 py-1.5 text-muted-foreground">{pair.num}</td>
-                          <td className="px-4 py-1.5 font-medium">{pair.black}</td>
-                          <td className="px-4 py-1.5 font-medium">{pair.white}</td>
-                        </tr>
-                      ))}
-                      {movePairs.length === 0 && (
-                        <tr className="border-b last:border-0">
-                          <td className="px-4 py-1.5 text-muted-foreground" colSpan={3}>Start playing...</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
 
             <div className="flex flex-col gap-2">
-              <Button variant="outline" size="sm" className="w-full" onClick={resetGame}>New Game</Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" className="w-full" onClick={resetGame}>New Game</Button>
+                <Button variant="outline" size="sm" className="w-full gap-1" onClick={handleRequestUndo} disabled={moves.length === 0 || isGameOver}>
+                  <RotateCcw className="h-3 w-3" /> Đi lại
+                </Button>
+              </div>
               <Button variant="outline" size="sm" className="w-full" onClick={handleOfferDraw}>Offer Draw</Button>
               <Button variant="destructive" size="sm" className="w-full" onClick={handleResign}>Resign</Button>
                <Button variant="secondary" size="sm" className="w-full" onClick={() => {

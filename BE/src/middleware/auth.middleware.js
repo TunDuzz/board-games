@@ -16,4 +16,19 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-module.exports = verifyToken;
+const optionalAuth = (req, res, next) => {
+    const token = req.header("Authorization");
+    if (!token) {
+        return next();
+    }
+    try {
+        const verified = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET || "secretKey");
+        req.user = verified;
+        next();
+    } catch (err) {
+        // Skip error for optional auth
+        next();
+    }
+};
+
+module.exports = {verifyToken, optionalAuth};

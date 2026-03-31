@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const roomController = require("../controllers/room.controller");
-const verifyToken = require("../middleware/auth.middleware");
+const { verifyToken } = require("../middleware/auth.middleware");
 
 // Yêu cầu xác thực tài khoản cho mọi route của Room
 router.use(verifyToken);

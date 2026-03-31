@@ -22,6 +22,7 @@ module.exports = (io) => {
                 if (friendSocketId) {
                     io.to(friendSocketId).emit("friend_status_changed", {
                         userId: userId,
+                        username: socket.user.username,
                         status: status // "online", "offline", "in_game"
                     });
                 }

@@ -1,18 +1,95 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Text, Group, Image as KonvaImage } from 'react-konva';
+import confetti from 'canvas-confetti';
+import Konva from 'konva';
 
 // Cờ Vua: Component render SVG chuẩn
-const ChessPieceImage = ({ type, color, size }) => {
+const ChessPieceImage = ({ type, color, size, skin = 'classic' }) => {
     const [image, setImage] = useState(null);
 
     useEffect(() => {
         const img = new window.Image();
+        img.crossOrigin = 'Anonymous';
+        // Always load classic for now, we'll apply filters/effects to change style
         img.src = `/chess-pieces/${color}-${type}.png`;
         img.onload = () => setImage(img);
         img.onerror = () => console.error("Failed to load image:", img.src);
     }, [type, color]);
 
-    return image ? <KonvaImage image={image} x={-size / 2} y={-size / 2} width={size} height={size} /> : null;
+    const effects = useMemo(() => {
+        if (skin === 'glass') {
+            return {
+                opacity: 0.6,
+                shadowColor: color === 'white' ? '#fff' : '#000',
+                shadowBlur: 8,
+                shadowOpacity: 0.4,
+                shadowOffset: { x: 2, y: 2 }
+            };
+        }
+        if (skin === 'anime') {
+            return {
+                opacity: 1,
+                shadowColor: color === 'white' ? '#FFD700' : '#4B0082',
+                shadowBlur: 12,
+                shadowOpacity: 0.9,
+                shadowOffset: { x: 0, y: 0 }
+            };
+        }
+        if (skin === 'cyberpunk' || skin === 'neon') {
+            return {
+                opacity: 0.9,
+                shadowColor: color === 'white' ? '#00F0FF' : '#FF00FF',
+                shadowBlur: 20,
+                shadowOpacity: 1,
+                shadowOffset: { x: 0, y: 0 }
+            };
+        }
+        return { opacity: 1, shadowOpacity: 0 };
+    }, [skin, color]);
+
+    return image ? (
+        <KonvaImage 
+            image={image} 
+            x={-size / 2} 
+            y={-size / 2} 
+            width={size} 
+            height={size} 
+            {...effects}
+        />
+    ) : null;
+};
+
+const AnimatedPiece = ({ children, x, y, isLastMoveTo, fromX, fromY }) => {
+    const groupRef = React.useRef();
+    const [pos, setPos] = useState({ x: isLastMoveTo ? fromX : x, y: isLastMoveTo ? fromY : y });
+
+    useEffect(() => {
+        if (isLastMoveTo) {
+            // Animate from (fromX, fromY) to (x, y)
+            const node = groupRef.current;
+            if (node) {
+                node.to({
+                    x: x,
+                    y: y,
+                    duration: 0.3,
+                    easing: Konva.Easings.EaseInOut
+                });
+            }
+        } else {
+            // Instant update for non-moving pieces
+            const node = groupRef.current;
+            if (node) {
+                node.setAttrs({ x, y });
+            }
+            setPos({ x, y });
+        }
+    }, [x, y, isLastMoveTo]);
+
+    return (
+        <Group ref={groupRef} x={pos.x} y={pos.y}>
+            {children}
+        </Group>
+    );
 };
 
 export const GameBoard = ({
@@ -20,10 +97,12 @@ export const GameBoard = ({
     boardState = [],
     selectedSquare = null,
     validMoves = [],
-    lastMove = null, // Thêm vết nước đi cuối
-    winningLine = [], // Thêm đường thắng
-    hintMove = null, // Thêm nước đi gợi ý
-    flipped = false, // Lật bàn cờ cho người chơi bên kia
+    lastMove = null,
+    winningLine = [],
+    hintMove = null,
+    flipped = false,
+    theme = null, // Theme configuration from hook
+    skin = 'classic', // Piece skin ID
     onSquareClick
 }) => {
     const [containerSize, setContainerSize] = useState({ width: 800, height: 800 });
@@ -33,7 +112,6 @@ export const GameBoard = ({
         const updateSize = () => {
             if (containerRef.current) {
                 const { clientWidth, clientHeight } = containerRef.current;
-                // Leave some room for margins/padding
                 setContainerSize({
                     width: clientWidth - 40,
                     height: clientHeight - 40
@@ -46,12 +124,10 @@ export const GameBoard = ({
         return () => window.removeEventListener('resize', updateSize);
     }, []);
 
-    // 1. Cấu hình kích thước và cơ chế lưới theo từng loại cờ
     const config = useMemo(() => {
         const baseRows = gameType === 'xiangqi' ? 10 : (gameType === 'chess' ? 8 : 15);
         const baseCols = gameType === 'xiangqi' ? 9 : (gameType === 'chess' ? 8 : 15);
 
-        // Calculate adaptive cellSize
         const paddingValue = gameType === 'chess' ? 0 : (gameType === 'caro' ? 30 : 35);
         const availableW = containerSize.width - paddingValue * 2;
         const availableH = containerSize.height - paddingValue * 2;
@@ -59,31 +135,48 @@ export const GameBoard = ({
         const cellW = availableW / (gameType === 'caro' || gameType === 'xiangqi' ? baseCols - 1 : baseCols);
         const cellH = availableH / (gameType === 'caro' || gameType === 'xiangqi' ? baseRows - 1 : baseRows);
 
-        // We want a square cell, and we want it to fit in both directions
         const calculatedCellSize = Math.floor(Math.min(cellW, cellH, gameType === 'caro' ? 45 : 80));
+
+        const themeData = theme ? theme[gameType] : null;
 
         switch (gameType) {
             case 'xiangqi':
-                return { rows: 10, cols: 9, isIntersectionBased: true, bg: '#D46231', cellSize: calculatedCellSize, padding: calculatedCellSize / 2 };
+                return { 
+                  rows: 10, cols: 9, isIntersectionBased: true, 
+                  bg: themeData?.bg || '#D46231', 
+                  line: themeData?.line || '#000',
+                  lastMoveColor: themeData?.lastMove || 'rgba(62, 39, 35, 0.4)',
+                  cellSize: calculatedCellSize, padding: calculatedCellSize / 2 
+                };
             case 'chess':
-                return { rows: 8, cols: 8, isIntersectionBased: false, bg: '#333', cellSize: calculatedCellSize, padding: 0, light: '#ebecd0', dark: '#779556' };
+                return { 
+                  rows: 8, cols: 8, isIntersectionBased: false, 
+                  bg: '#333', 
+                  lastMoveColor: themeData?.lastMove || 'rgba(255, 235, 59, 0.3)',
+                  cellSize: calculatedCellSize, padding: 0, 
+                  light: themeData?.light || '#ebecd0', 
+                  dark: themeData?.dark || '#779556' 
+                };
             case 'caro':
             default:
-                return { rows: 15, cols: 15, isIntersectionBased: true, bg: '#E1C699', cellSize: calculatedCellSize, padding: calculatedCellSize * 0.6 };
+                return { 
+                  rows: 15, cols: 15, isIntersectionBased: true, 
+                  bg: themeData?.bg || '#E1C699', 
+                  line: themeData?.line || '#000',
+                  lastMoveColor: themeData?.lastMove || 'rgba(255, 235, 59, 0.3)',
+                  cellSize: calculatedCellSize, padding: calculatedCellSize * 0.6 
+                };
         }
-    }, [gameType, containerSize]);
+    }, [gameType, containerSize, theme]);
 
-    const { rows, cols, isIntersectionBased, bg, cellSize, padding, light, dark } = config;
+    const { rows, cols, isIntersectionBased, bg, cellSize, padding, light, dark, line, lastMoveColor } = config;
 
-    // Tính toán chiều rộng và chiều cao thực tế của vùng kẻ lưới
     const gridWidth = isIntersectionBased ? (cols - 1) * cellSize : cols * cellSize;
     const gridHeight = isIntersectionBased ? (rows - 1) * cellSize : rows * cellSize;
 
-    // Kích thước của toàn bộ Canvas (bao gồm viền)
     const stageWidth = gridWidth + padding * 2;
     const stageHeight = gridHeight + padding * 2;
 
-    // 2. Logic tương tác
     const handleCanvasClick = (e) => {
         if (e.evt.button !== 0 && e.evt.type !== 'touchstart') return;
 
@@ -103,55 +196,51 @@ export const GameBoard = ({
             row = Math.floor(y / cellSize);
         }
 
-        // Đảo ngược nếu board lật
         if (flipped) {
             col = cols - 1 - col;
             row = rows - 1 - row;
         }
 
-        // Kiểm tra tính hợp lệ của tọa độ trước khi gọi callback
         if (row >= 0 && row < rows && col >= 0 && col < cols) {
             if (onSquareClick) onSquareClick(row, col);
         }
     };
 
-    // 3. UI Lưới Cờ Caro (Gomoku)
     const renderCaroGrid = () => {
         const lines = [];
         for (let c = 0; c < cols; c++) {
             lines.push(
-                <Line key={`v-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke="#000" strokeWidth={1} />
+                <Line key={`v-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke={line} strokeWidth={1} />
             );
         }
         for (let r = 0; r < rows; r++) {
             lines.push(
-                <Line key={`h-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke="#000" strokeWidth={1} />
+                <Line key={`h-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke={line} strokeWidth={1} />
             );
         }
         return lines;
     };
 
-    // 4. UI Lưới Cờ Tướng (Xiangqi)
     const renderXiangqiGrid = () => {
         const lines = [];
 
         for (let r = 0; r < rows; r++) {
-            lines.push(<Line key={`hx-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke="#000" strokeWidth={2} />);
+            lines.push(<Line key={`hx-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke={line} strokeWidth={2} />);
         }
 
         for (let c = 0; c < cols; c++) {
             if (c === 0 || c === cols - 1) {
-                lines.push(<Line key={`vx-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke="#000" strokeWidth={2} />);
+                lines.push(<Line key={`vx-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke={line} strokeWidth={2} />);
             } else {
-                lines.push(<Line key={`vx-top-${c}`} points={[c * cellSize, 0, c * cellSize, 4 * cellSize]} stroke="#000" strokeWidth={2} />);
-                lines.push(<Line key={`vx-bot-${c}`} points={[c * cellSize, 5 * cellSize, c * cellSize, gridHeight]} stroke="#000" strokeWidth={2} />);
+                lines.push(<Line key={`vx-top-${c}`} points={[c * cellSize, 0, c * cellSize, 4 * cellSize]} stroke={line} strokeWidth={2} />);
+                lines.push(<Line key={`vx-bot-${c}`} points={[c * cellSize, 5 * cellSize, c * cellSize, gridHeight]} stroke={line} strokeWidth={2} />);
             }
         }
 
-        lines.push(<Line key="palace-top-1" points={[3 * cellSize, 0, 5 * cellSize, 2 * cellSize]} stroke="#000" strokeWidth={2} />);
-        lines.push(<Line key="palace-top-2" points={[5 * cellSize, 0, 3 * cellSize, 2 * cellSize]} stroke="#000" strokeWidth={2} />);
-        lines.push(<Line key="palace-bot-1" points={[3 * cellSize, 7 * cellSize, 5 * cellSize, 9 * cellSize]} stroke="#000" strokeWidth={2} />);
-        lines.push(<Line key="palace-bot-2" points={[5 * cellSize, 7 * cellSize, 3 * cellSize, 9 * cellSize]} stroke="#000" strokeWidth={2} />);
+        lines.push(<Line key="palace-top-1" points={[3 * cellSize, 0, 5 * cellSize, 2 * cellSize]} stroke={line} strokeWidth={2} />);
+        lines.push(<Line key="palace-top-2" points={[5 * cellSize, 0, 3 * cellSize, 2 * cellSize]} stroke={line} strokeWidth={2} />);
+        lines.push(<Line key="palace-bot-1" points={[3 * cellSize, 7 * cellSize, 5 * cellSize, 9 * cellSize]} stroke={line} strokeWidth={2} />);
+        lines.push(<Line key="palace-bot-2" points={[5 * cellSize, 7 * cellSize, 3 * cellSize, 9 * cellSize]} stroke={line} strokeWidth={2} />);
 
         const drawTick = (r, c) => {
             const x = c * cellSize;
@@ -180,13 +269,12 @@ export const GameBoard = ({
             <Group>
                 {lines}
                 {marks}
-                <Text text="楚 河" x={gridWidth * 0.15} y={4 * cellSize + 15} fontSize={36} fontFamily="KaiTi, serif" fill="#000" />
-                <Text text="漢 界" x={gridWidth * 0.60} y={4 * cellSize + 15} fontSize={36} fontFamily="KaiTi, serif" fill="#000" />
+                <Text text="楚 河" x={gridWidth * 0.15} y={4 * cellSize + 15} fontSize={36} fontFamily="KaiTi, serif" fill={line} />
+                <Text text="漢 界" x={gridWidth * 0.60} y={4 * cellSize + 15} fontSize={36} fontFamily="KaiTi, serif" fill={line} />
             </Group>
         );
     };
 
-    // 5. UI Lưới Cờ Vua (Chess)
     const renderChessGrid = () => {
         const squares = [];
         for (let r = 0; r < rows; r++) {
@@ -207,7 +295,6 @@ export const GameBoard = ({
         return squares;
     };
 
-    // 6. UI Gợi ý nước đi (Hints)
     const renderHints = () => {
         return validMoves.map((move, idx) => {
             const renderC = flipped ? cols - 1 - move.col : move.col;
@@ -232,8 +319,6 @@ export const GameBoard = ({
 
     const renderHint = () => {
         if (!hintMove) return null;
-        
-        // Caro hint format is {row, col}, Chess/Xiangqi is {from: {row, col}, to: {row, col}}
         const isCaro = gameType === 'caro';
         
         if (isCaro) {
@@ -244,13 +329,7 @@ export const GameBoard = ({
 
             return (
                 <Group x={centerX} y={centerY}>
-                    <Circle
-                        radius={cellSize * 0.35}
-                        fill="rgba(255, 193, 7, 0.3)"
-                        stroke="#ffc107"
-                        strokeWidth={2}
-                        dash={[4, 4]}
-                    />
+                    <Circle radius={cellSize * 0.35} fill="rgba(255, 193, 7, 0.3)" stroke="#ffc107" strokeWidth={2} dash={[4, 4]} />
                     <Circle radius={4} fill="#ffc107" />
                 </Group>
             );
@@ -268,26 +347,12 @@ export const GameBoard = ({
 
         return (
             <Group>
-                <Line
-                    points={[centerXFrom, centerYFrom, centerXTo, centerYTo]}
-                    stroke="#ffc107"
-                    strokeWidth={4}
-                    dash={[10, 5]}
-                    opacity={0.6}
-                />
-                <Circle
-                    x={centerXTo}
-                    y={centerYTo}
-                    radius={cellSize * 0.2}
-                    fill="rgba(255, 193, 7, 0.4)"
-                    stroke="#ffc107"
-                    strokeWidth={2}
-                />
+                <Line points={[centerXFrom, centerYFrom, centerXTo, centerYTo]} stroke="#ffc107" strokeWidth={4} dash={[10, 5]} opacity={0.6} />
+                <Circle x={centerXTo} y={centerYTo} radius={cellSize * 0.2} fill="rgba(255, 193, 7, 0.4)" stroke="#ffc107" strokeWidth={2} />
             </Group>
         );
     };
 
-    // 7. UI Vẽ Toàn Bộ Quân Cờ
     const renderPieces = () => {
         if (!boardState || boardState.length === 0) return null;
 
@@ -303,10 +368,21 @@ export const GameBoard = ({
                 const centerX = isIntersectionBased ? renderC * cellSize : renderC * cellSize + cellSize / 2;
                 const centerY = isIntersectionBased ? renderR * cellSize : renderR * cellSize + cellSize / 2;
 
+                const isLastMoveTo = lastMove && (lastMove.to ? (lastMove.to.row === r && lastMove.to.col === c) : (lastMove.row === r && lastMove.col === c));
+                const fromX = lastMove && lastMove.from ? (isIntersectionBased ? (flipped ? (cols - 1 - lastMove.from.col) : lastMove.from.col) * cellSize : (flipped ? (cols - 1 - lastMove.from.col) : lastMove.from.col) * cellSize + cellSize / 2) : centerX;
+                const fromY = lastMove && lastMove.from ? (isIntersectionBased ? (flipped ? (rows - 1 - lastMove.from.row) : lastMove.from.row) * cellSize : (flipped ? (rows - 1 - lastMove.from.row) : lastMove.from.row) * cellSize + cellSize / 2) : centerY;
+
                 elements.push(
-                    <Group key={`p-${r}-${c}`} x={centerX} y={centerY}>
+                    <AnimatedPiece 
+                        key={`p-${r}-${c}`} 
+                        x={centerX} 
+                        y={centerY}
+                        isLastMoveTo={isLastMoveTo}
+                        fromX={fromX}
+                        fromY={fromY}
+                    >
                         {renderSinglePiece(gameType, piece)}
-                    </Group>
+                    </AnimatedPiece>
                 );
             }
         }
@@ -316,147 +392,106 @@ export const GameBoard = ({
     const renderSinglePiece = (type, piece) => {
         if (type === 'caro') {
             const isBlack = (piece === 'black' || piece?.color === 'black');
-            return (
-                <Circle
-                    radius={cellSize * 0.4}
-                    fill={isBlack ? '#222' : '#f0f0f0'}
-                    stroke="#444"
-                    strokeWidth={1}
-                    shadowColor="#000"
-                    shadowBlur={4}
-                    shadowOpacity={0.4}
-                    shadowOffset={{ x: 2, y: 2 }}
-                />
-            );
+            if (skin === 'glass') {
+                return (
+                    <Group>
+                        <Circle radius={cellSize * 0.4} fillRadialGradientStartPoint={{ x: 0, y: 0 }} fillRadialGradientStartRadius={0} fillRadialGradientEndPoint={{ x: 0, y: 0 }} fillRadialGradientEndRadius={cellSize * 0.4} fillRadialGradientColorStops={[0, isBlack ? 'rgba(50,50,50,0.8)' : 'rgba(255,255,255,0.8)', 1, isBlack ? 'rgba(0,0,0,0.9)' : 'rgba(200,200,200,0.9)']} shadowBlur={10} />
+                        <Circle radius={cellSize * 0.1} x={-cellSize * 0.1} y={-cellSize * 0.1} fill="white" opacity={0.4} />
+                    </Group>
+                );
+            }
+            return <Circle radius={cellSize * 0.4} fill={isBlack ? '#222' : '#f0f0f0'} stroke="#444" strokeWidth={1} shadowBlur={4} shadowOpacity={0.4} shadowOffset={{ x: 2, y: 2 }} />;
         }
-
         if (type === 'xiangqi') {
             const isRed = piece?.color === 'red';
-            const textColor = isRed ? '#D32F2F' : '#000000'; // Đỏ tươi và Đen tuyền
+            const textColor = isRed ? '#D32F2F' : '#000000';
+            
+            if (skin === 'anime') {
+                // Giả sử có icon anime hoặc style khác
+                return (
+                    <Group>
+                        <Circle radius={cellSize * 0.45} fill={isRed ? '#FFEBEE' : '#F5F5F5'} stroke={textColor} strokeWidth={3} />
+                        <Text text={piece?.label || '兵'} x={-cellSize / 2} y={-cellSize / 2 + 2} width={cellSize} height={cellSize} fontSize={cellSize * 0.6} fontFamily="'STKaiti', 'KaiTi', 'serif'" fontWeight="bold" fill={textColor} align="center" verticalAlign="middle" shadowBlur={2} />
+                    </Group>
+                );
+            }
 
             return (
                 <Group>
-                    <Circle
-                        radius={cellSize * 0.45}
-                        fill="white"
-                        stroke={textColor}
-                        strokeWidth={2}
-                        shadowColor="#000"
-                        shadowBlur={3}
-                        shadowOpacity={0.3}
-                        shadowOffset={{ x: 1, y: 1 }}
-                    />
-                    <Circle
-                        radius={cellSize * 0.38}
-                        fill="navajowhite"
-                        stroke={textColor}
-                        strokeWidth={1.2}
-                    />
-                    <Text
-                        text={piece?.label || '兵'}
-                        x={-cellSize / 2}
-                        y={-cellSize / 2}
-                        width={cellSize}
-                        height={cellSize}
-                        fontSize={cellSize * 0.58}
-                        fontFamily="'STKaiti', 'KaiTi', 'serif'"
-                        fontWeight="bold"
-                        fill={textColor}
-                        align="center"
-                        verticalAlign="middle"
-                    />
+                    <Circle radius={cellSize * 0.45} fill="white" stroke={textColor} strokeWidth={2} shadowBlur={3} />
+                    <Circle radius={cellSize * 0.38} fill="navajowhite" stroke={textColor} strokeWidth={1.2} />
+                    <Text text={piece?.label || '兵'} x={-cellSize / 2} y={-cellSize / 2} width={cellSize} height={cellSize} fontSize={cellSize * 0.58} fontFamily="'STKaiti', 'KaiTi', 'serif'" fontWeight="bold" fill={textColor} align="center" verticalAlign="middle" />
                 </Group>
             );
         }
-
         if (type === 'chess') {
-            return <ChessPieceImage type={piece?.type || 'p'} color={piece?.color === 'white' ? 'white' : 'black'} size={cellSize * 0.9} />;
+            // Có thể mở rộng ChessPieceImage để nhận skin prop
+            return <ChessPieceImage type={piece?.type || 'p'} color={piece?.color === 'white' ? 'white' : 'black'} size={cellSize * 0.9} skin={skin} />;
         }
-
         return null;
     };
 
     const renderWinningLine = () => {
         if (!winningLine || winningLine.length < 5) return null;
-
-        // Chuyển đổi tọa độ board sang tọa độ canvas
         const points = winningLine.flatMap(pos => {
             const renderC = flipped ? cols - 1 - pos.col : pos.col;
             const renderR = flipped ? rows - 1 - pos.row : pos.row;
             return [renderC * cellSize, renderR * cellSize];
         });
-
-        return (
-            <Line
-                points={points}
-                stroke="red"
-                strokeWidth={6}
-                lineCap="round"
-                lineJoin="round"
-                opacity={0.8}
-                shadowColor="red"
-                shadowBlur={10}
-            />
-        );
+        return <Line points={points} stroke="red" strokeWidth={6} lineCap="round" lineJoin="round" opacity={0.8} shadowBlur={10} />;
     };
 
     return (
         <div ref={containerRef} className="flex justify-center items-center w-full h-full min-h-0 overflow-hidden">
             <Stage width={stageWidth} height={stageHeight} onMouseDown={handleCanvasClick} onTouchStart={handleCanvasClick}>
                 <Layer>
+                    {/* All elements in a single Layer for correct video recording */}
                     <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill={bg} shadowColor="#000" shadowBlur={10} shadowOpacity={0.3} cornerRadius={8} />
-                </Layer>
+                    
+                    <Group x={padding} y={padding}>
+                        {gameType === 'caro' && renderCaroGrid()}
+                        {gameType === 'xiangqi' && renderXiangqiGrid()}
+                        {gameType === 'chess' && renderChessGrid()}
 
-                <Layer x={padding} y={padding}>
-                    {gameType === 'caro' && renderCaroGrid()}
-                    {gameType === 'xiangqi' && renderXiangqiGrid()}
-                    {gameType === 'chess' && renderChessGrid()}
+                        {selectedSquare && (
+                            <Rect
+                                x={(flipped ? cols - 1 - selectedSquare.col : selectedSquare.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                y={(flipped ? rows - 1 - selectedSquare.row : selectedSquare.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                width={cellSize}
+                                height={cellSize}
+                                fill="rgba(255, 255, 0, 0.3)"
+                            />
+                        )}
 
-                    {selectedSquare && (
-                        <Rect
-                            x={(flipped ? cols - 1 - selectedSquare.col : selectedSquare.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                            y={(flipped ? rows - 1 - selectedSquare.row : selectedSquare.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                            width={cellSize}
-                            height={cellSize}
-                            fill="rgba(255, 255, 0, 0.3)"
-                        />
-                    )}
-
-                    {/* Highlight nước đi cuối cùng (Last Move) */}
-                    {lastMove && (
-                       <>
-                         {/* Điểm xuất phát (Chess/Xiangqi) */}
-                         {lastMove.from && (
-                             <Rect
-                                 x={(flipped ? cols - 1 - lastMove.from.col : lastMove.from.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 y={(flipped ? rows - 1 - lastMove.from.row : lastMove.from.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 width={cellSize}
-                                 height={cellSize}
-                                 fill="rgba(255, 235, 59, 0.3)"
-                             />
-                         )}
-                         {/* Điểm đến hoặc Tọa độ đơn (Caro) */}
-                         {(lastMove.to || lastMove.col !== undefined) && (
-                             <Rect
-                                 x={(flipped ? cols - 1 - (lastMove.to?.col ?? lastMove.col) : (lastMove.to?.col ?? lastMove.col)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 y={(flipped ? rows - 1 - (lastMove.to?.row ?? lastMove.row) : (lastMove.to?.row ?? lastMove.row)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 width={cellSize}
-                                 height={cellSize}
-                                 fill="rgba(255, 235, 59, 0.4)"
-                             />
-                         )}
-                       </>
-                    )}
-                </Layer>
-
-                <Layer x={padding} y={padding}>
-                    {renderHints()}
-                </Layer>
-
-                <Layer x={padding} y={padding}>
-                    {renderPieces()}
-                    {renderHint()}
-                    {gameType === 'caro' && renderWinningLine()}
+                        {lastMove && (
+                           <>
+                             {lastMove.from && (
+                                 <Rect
+                                     x={(flipped ? cols - 1 - lastMove.from.col : lastMove.from.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                     y={(flipped ? rows - 1 - lastMove.from.row : lastMove.from.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                     width={cellSize}
+                                     height={cellSize}
+                                     fill={lastMoveColor}
+                                 />
+                             )}
+                             {(lastMove.to || lastMove.col !== undefined) && (
+                                 <Rect
+                                     x={(flipped ? cols - 1 - (lastMove.to?.col ?? lastMove.col) : (lastMove.to?.col ?? lastMove.col)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                     y={(flipped ? rows - 1 - (lastMove.to?.row ?? lastMove.row) : (lastMove.to?.row ?? lastMove.row)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                     width={cellSize}
+                                     height={cellSize}
+                                     fill={lastMoveColor}
+                                     opacity={1.2} // Gốc là 0.4, overlay thêm 0.3
+                                 />
+                             )}
+                           </>
+                        )}
+                        
+                        {renderHints()}
+                        {renderPieces()}
+                        {renderHint()}
+                        {gameType === 'caro' && renderWinningLine()}
+                    </Group>
                 </Layer>
             </Stage>
         </div>
