@@ -8,7 +8,7 @@ const {
     getReceivedInvites,
     getSentInvites
 } = require("../controllers/gameInvite.controller");
-const verifyToken = require("../middleware/auth.middleware");
+const { verifyToken } = require("../middleware/auth.middleware");
 
 // Tất cả routes đều cần authentication
 router.use(verifyToken);

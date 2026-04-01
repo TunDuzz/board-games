@@ -1,4 +1,4 @@
-import { Home, User, History, Trophy, LogOut, Gamepad2, Loader2, Users } from "lucide-react";
+import { Home, User, History, Trophy, LogOut, Gamepad2, Loader2, Users, MessageSquare, Sun, Moon } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -19,6 +19,8 @@ import { userService } from "@/services/user.service";
 import { authService } from "@/services/auth.service";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { FeedbackModal } from "@/components/FeedbackModal";
+import { useTheme } from "@/hooks/useTheme";
 
 const navItems = [
   { title: "Trang chủ", url: "/dashboard", icon: Home },
@@ -32,6 +34,8 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -104,10 +108,32 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setIsFeedbackOpen(true)}
+                  size="lg"
+                  tooltip="Góp ý"
+                  className={cn(
+                    "relative h-12 w-full justify-start gap-4 rounded-xl px-3 transition-all duration-300 ease-in-out font-outfit",
+                    "text-muted-foreground hover:bg-accent/80 hover:text-foreground",
+                    "group overflow-hidden"
+                  )}
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105 bg-transparent text-muted-foreground group-hover:text-foreground">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm font-semibold tracking-tight transition-all duration-300 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:w-0 ml-1">
+                    Feedback
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <FeedbackModal open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen} />
 
       <SidebarFooter className="border-t p-2">
         {loading ? (
@@ -141,21 +167,36 @@ export function AppSidebar() {
               </span>
             </div>
 
+            <div className="flex items-center gap-1 group-data-[state=collapsed]:hidden">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleTheme();
+                }}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/30",
+                  "transition-all duration-300 hover:bg-primary/10 hover:text-primary shrink-0"
+                )}
+                title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+              </button>
+
             <button
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={() => {
                 authService.logout();
                 window.location.href = "/";
               }}
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/30",
-                "hover:bg-destructive/10 hover:text-destructive shrink-0",
+                "transition-all duration-300 hover:bg-destructive/10 hover:text-destructive shrink-0",
                 "group-data-[state=collapsed]:mt-1"
               )}
-              title="Đăng xuất"
+              title="Logout"
             >
               <LogOut className="h-4.5 w-4.5" />
             </button>
+          </div>
           </div>
         ) : null}
       </SidebarFooter>

@@ -10,7 +10,7 @@ const inGameUsers = new Map();
 
 module.exports = (io) => {
     // Helper function để gửi thông báo trạng thái tới bạn bè
-    const broadcastStatusToFriends = async (userId, status) => {
+    const broadcastStatusToFriends = async (userId, username, status) => {
         try {
             const friends = await Friend.findAll({
                 where: { user_id: userId, status: "accepted" },
@@ -22,6 +22,7 @@ module.exports = (io) => {
                 if (friendSocketId) {
                     io.to(friendSocketId).emit("friend_status_changed", {
                         userId: userId,
+                        username: username,
                         status: status // "online", "offline", "in_game"
                     });
                 }
@@ -68,7 +69,7 @@ module.exports = (io) => {
         console.log(`[Socket] Connected: ${socket.user.username} (${socket.id})`);
 
         onlineUsers.set(socket.user.id, socket.id);
-        broadcastStatusToFriends(socket.user.id, "online");
+        broadcastStatusToFriends(socket.user.id, socket.user.username, "online");
 
         matchmakingHandler(io, socket, onlineUsers);
         gameHandler(io, socket, onlineUsers, inGameUsers, broadcastStatusToFriends);
@@ -77,7 +78,7 @@ module.exports = (io) => {
             console.log(`[Socket] Disconnected: ${socket.user.username}`);
             onlineUsers.delete(socket.user.id);
             inGameUsers.delete(socket.user.id);
-            broadcastStatusToFriends(socket.user.id, "offline");
+            broadcastStatusToFriends(socket.user.id, socket.user.username, "offline");
 
             try {
                 await MatchmakingQueue.destroy({ where: { user_id: socket.user.id } });

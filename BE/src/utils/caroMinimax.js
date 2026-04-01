@@ -1,130 +1,114 @@
 /**
  * Thuật toán Minimax + Alpha-Beta Pruning dành cho game Caro (Gomoku)
- * Grid 15x15
+ * Grid 15x15 - Nâng cấp evaluation function (Dễ / Trung bình / Khó)
  */
 
 const BOARD_SIZE = 15;
-
-// Điểm số đánh giá cho chuỗi
 const WIN_SCORE = 100000000;
-const SCORE_TABLE = {
-    5: 10000000,   // 5 quân - Thắng
-    4: 10000,      // 4 quân liên tục mở 2 đầu
-    3: 1000,       // 3 quân mở 2 đầu
-    2: 100,        // 2 quân
-    1: 10          // 1 quân
-};
-
-// Điểm chặn (khi đối thủ có chuỗi)
-const BLOCK_SCORE = {
-    4: 1000000,    // Chặn 4 quân đối thủ cực kỳ khẩn cấp
-    3: 5000,       // Chặn 3 quân
-    2: 500
-};
 
 /**
  * Tìm nước đi tốt nhất
  */
 exports.getBestCaroMove = (movesHistory, botColor = 'White', difficulty = 'medium') => {
-    // 1. Dựng lại bàn cờ 2D
     const board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
     movesHistory.forEach(m => {
         if (m.y >= 0 && m.y < BOARD_SIZE && m.x >= 0 && m.x < BOARD_SIZE) {
-            board[m.y][m.x] = m.color.toLowerCase(); // 'black' hoặc 'white'
+            board[m.y][m.x] = m.color.toLowerCase();
         }
     });
 
     const bot = botColor.toLowerCase();
     const opponent = bot === 'white' ? 'black' : 'white';
 
-    // 2. Tìm các ô trống có thể đánh (gần các quân đã đánh)
     const possibleMoves = getCandidateMoves(board);
-    if (possibleMoves.length === 0) {
-        // Bàn cờ trống, đánh ở giữa
-        return { x: 7, y: 7 };
-    }
+    if (possibleMoves.length === 0) return { x: 7, y: 7 };
 
-    let bestMove = possibleMoves[0];
-    let bestScore = -Infinity;
-    
-    // Cấp độ khó tương ứng với độ sâu Minimax
-    let depth = 2; 
-    if (difficulty === 'easy') depth = 1;
-    else if (difficulty === 'hard') depth = 3;
+    // Easy: random trong top moves, depth 1
+    // Medium: depth 2, full evaluation
+    // Hard: depth 3-4, wider candidate radius, full evaluation
+    let depth = 2;
+    let randomFactor = 0;
+    if (difficulty === 'easy') { depth = 1; randomFactor = 0.5; }
+    else if (difficulty === 'hard') { depth = 3; }
 
-    for (const move of possibleMoves) {
-        // Giả lập đánh thử
+    // Sắp xếp theo điểm heuristic trước để alpha-beta hiệu quả hơn
+    const scoredMoves = possibleMoves.map(move => {
         board[move.y][move.x] = bot;
-        
-        // Alpha-Beta
-        const score = minimax(board, depth - 1, false, -Infinity, Infinity, bot, opponent);
-        
-        // Hoàn tác
+        const s = evaluateBoard(board, bot, opponent);
+        board[move.y][move.x] = null;
+        return { move, score: s };
+    }).sort((a, b) => b.score - a.score);
+
+    // Với độ khó dễ, chỉ xét top 8 moves để tránh luôn chọn nước tốt nhất
+    const movesToEval = difficulty === 'easy'
+        ? scoredMoves.slice(0, Math.min(8, scoredMoves.length))
+        : scoredMoves.slice(0, Math.min(20, scoredMoves.length));
+
+    let bestMove = movesToEval[0].move;
+    let bestScore = -Infinity;
+
+    for (const { move } of movesToEval) {
+        board[move.y][move.x] = bot;
+        let score = minimax(board, depth - 1, false, -Infinity, Infinity, bot, opponent);
         board[move.y][move.x] = null;
 
+        // Dễ: thêm nhiễu ngẫu nhiên để bot đôi khi không chọn nước tối ưu
+        if (difficulty === 'easy') {
+            score += (Math.random() - 0.5) * 5000 * randomFactor;
+        }
         if (score > bestScore) {
             bestScore = score;
             bestMove = move;
         }
     }
 
-    return bestMove;
+    return { move: bestMove, score: bestScore };
 };
 
-/**
- * Thuật toán Minimax đệ quy kèm Alpha-Beta
- */
 function minimax(board, depth, isMaximizing, alpha, beta, bot, opponent) {
-    if (depth === 0) {
-        return evaluateBoard(board, bot, opponent);
-    }
+    if (depth === 0) return evaluateBoard(board, bot, opponent);
 
-    const candidateMoves = getCandidateMoves(board);
-    if (candidateMoves.length === 0) return 0;
+    const candidates = getCandidateMovesLimited(board, depth);
+    if (candidates.length === 0) return 0;
 
     if (isMaximizing) {
         let maxEval = -Infinity;
-        for (const move of candidateMoves) {
+        for (const move of candidates) {
             board[move.y][move.x] = bot;
             const ev = minimax(board, depth - 1, false, alpha, beta, bot, opponent);
             board[move.y][move.x] = null;
             maxEval = Math.max(maxEval, ev);
             alpha = Math.max(alpha, ev);
-            if (beta <= alpha) break; // Pruning
+            if (beta <= alpha) break;
+            if (ev >= WIN_SCORE) break;  // thắng rồi không cần xét tiếp
         }
         return maxEval;
     } else {
         let minEval = Infinity;
-        for (const move of candidateMoves) {
+        for (const move of candidates) {
             board[move.y][move.x] = opponent;
             const ev = minimax(board, depth - 1, true, alpha, beta, bot, opponent);
             board[move.y][move.x] = null;
             minEval = Math.min(minEval, ev);
             beta = Math.min(beta, ev);
-            if (beta <= alpha) break; // Pruning
+            if (beta <= alpha) break;
         }
         return minEval;
     }
 }
 
 /**
- * Thu hẹp vùng tìm kiếm: Chỉ tìm các ô trống bao quanh các quân đã đánh trong bán kính 1-2 ô
+ * Candidate moves trong bán kính 2 ô (tốt hơn bán kính 1)
  */
 function getCandidateMoves(board) {
     const candidates = new Map();
-    const directions = [
-        [-1,0],[1,0],[0,-1],[0,1],
-        [-1,-1],[1,1],[-1,1],[1,-1]
-    ];
-
+    const RADIUS = 2;
     for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
             if (board[r][c] !== null) {
-                // Có quân ở đây, duyệt 8 hướng xung quanh nó
-                for (const [dr, dc] of directions) {
-                    for (let step = 1; step <= 1; step++) { // R bán kính 1 ô
-                        const nr = r + dr * step;
-                        const nc = c + dc * step;
+                for (let dr = -RADIUS; dr <= RADIUS; dr++) {
+                    for (let dc = -RADIUS; dc <= RADIUS; dc++) {
+                        const nr = r + dr, nc = c + dc;
                         if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && board[nr][nc] === null) {
                             candidates.set(`${nr},${nc}`, { y: nr, x: nc });
                         }
@@ -137,64 +121,98 @@ function getCandidateMoves(board) {
 }
 
 /**
- * Hàm lượng giá (Evaluation Function) tổng quan bàn cờ
+ * Trong minimax đệ quy, dùng bán kính nhỏ hơn để giữ performance
+ */
+function getCandidateMovesLimited(board, depth) {
+    const candidates = new Map();
+    const RADIUS = depth >= 2 ? 2 : 1;
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            if (board[r][c] !== null) {
+                for (let dr = -RADIUS; dr <= RADIUS; dr++) {
+                    for (let dc = -RADIUS; dc <= RADIUS; dc++) {
+                        const nr = r + dr, nc = c + dc;
+                        if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && board[nr][nc] === null) {
+                            candidates.set(`${nr},${nc}`, { y: nr, x: nc });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return Array.from(candidates.values());
+}
+
+/**
+ * Hàm đánh giá nâng cấp: Tính điểm dựa trên pattern chuỗi có đầu mở/đóng
  */
 function evaluateBoard(board, bot, opponent) {
     let score = 0;
+    const DIRECTIONS = [[0,1],[1,0],[1,1],[1,-1]];
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            for (const [dr, dc] of DIRECTIONS) {
+                score += evaluateLine(board, r, c, dr, dc, bot, opponent);
+            }
+        }
+    }
+    return score;
+}
 
-    // Hướng duyệt: Ngang, Dọc, 2 Chéo
-    score += evaluateLineDirections(board, bot, opponent);
+/**
+ * Đánh giá một đoạn thẳng từ (r,c) với hướng (dr,dc)
+ * Phân biệt: đầu mở/đóng - chuỗi mở 2 đầu nguy hiểm hơn nhiều
+ */
+function evaluateLine(board, r, c, dr, dc, bot, opponent) {
+    let score = 0;
+
+    // Đánh giá cho bot
+    score += scoreSequence(board, r, c, dr, dc, bot, opponent);
+    // Đánh giá cho đối thủ (để chặn)
+    score -= scoreSequence(board, r, c, dr, dc, opponent, bot) * 1.1; // * 1.1: ưu tiên chặn
 
     return score;
 }
 
-function evaluateLineDirections(board, bot, opponent) {
-    let totalScore = 0;
+function scoreSequence(board, r, c, dr, dc, player, opp) {
+    // Đếm quân liên tiếp của 'player' bắt đầu từ (r,c)
+    let count = 0, score = 0;
+    let openEnds = 0;
 
-    // 4 hướng quét: Ngang, Dọc, Chéo 1, Chéo 2
-    for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE; c++) {
-            totalScore += scoreAtPoint(board, r, c, 0, 1, bot, opponent); // Ngang
-            totalScore += scoreAtPoint(board, r, c, 1, 0, bot, opponent); // Dọc
-            totalScore += scoreAtPoint(board, r, c, 1, 1, bot, opponent); // Chéo xuống
-            totalScore += scoreAtPoint(board, r, c, 1, -1, bot, opponent);// Chéo lên
-        }
-    }
-    return totalScore;
-}
-
-/**
- * Tính điểm cho 1 hướng di chuyển từ 1 điểm (r, c)
- */
-function scoreAtPoint(board, r, c, dr, dc, bot, opponent) {
-    let botCount = 0;
-    let oppCount = 0;
+    // Kiểm tra đầu phía sau
+    const prevR = r - dr, prevC = c - dc;
+    const backOpen = (prevR < 0 || prevR >= BOARD_SIZE || prevC < 0 || prevC >= BOARD_SIZE)
+        ? false : board[prevR][prevC] === null;
 
     for (let i = 0; i < 5; i++) {
-        const nr = r + dr * i;
-        const nc = c + dc * i;
-        if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
-            const cell = board[nr][nc];
-            if (cell === bot) botCount++;
-            else if (cell === opponent) oppCount++;
-        } else {
-            return 0; // Vượt biên, không đủ 5 ô tuyến
-        }
+        const nr = r + dr * i, nc = c + dc * i;
+        if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) break;
+        const cell = board[nr][nc];
+        if (cell === player) count++;
+        else if (cell === null) { openEnds++; break; }
+        else break; // bị chặn
     }
 
-    // Không thể tạo 5 nếu cả 2 quân đều nằm trong tuyến 5 ô
-    if (botCount > 0 && oppCount > 0) return 0;
+    if (count === 0) return 0;
+    if (backOpen) openEnds++;
 
-    if (botCount > 0) {
-        if (botCount === 5) return WIN_SCORE;
-        return SCORE_TABLE[botCount] || 0;
+    // Tính điểm theo chuỗi và số đầu mở
+    if (count >= 5) return WIN_SCORE;
+    if (count === 4) {
+        if (openEnds === 2) return 50000;   // 4 mở 2 đầu - gần như thắng
+        if (openEnds === 1) return 10000;   // 4 mở 1 đầu
+        return 100;
     }
-
-    if (oppCount > 0) {
-        if (oppCount === 5) return -WIN_SCORE;
-        // Chặn oppCount
-        return -BLOCK_SCORE[oppCount] || -SCORE_TABLE[oppCount] || 0;
+    if (count === 3) {
+        if (openEnds === 2) return 5000;    // 3 mở 2 đầu - rất nguy hiểm
+        if (openEnds === 1) return 500;
+        return 50;
     }
-
+    if (count === 2) {
+        if (openEnds === 2) return 200;
+        if (openEnds === 1) return 50;
+        return 10;
+    }
+    if (count === 1 && openEnds === 2) return 20;
     return 0;
 }

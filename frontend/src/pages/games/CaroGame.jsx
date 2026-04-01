@@ -9,13 +9,17 @@ import { GameRoomPanel } from "@/components/GameRoomPanel";
 import ChatBox from "@/components/ChatBox";
 import { aiService } from "@/services/ai.service"; 
 import { toast as sonnerToast } from "sonner"; 
-import { Loader2, Zap, Handshake, Play, X } from "lucide-react";
+import { Loader2, Zap, Handshake, Play, X, RotateCcw } from "lucide-react";
 import { socket } from "@/lib/socket"; 
 import { checkWin, checkDraw, getWinningLine } from "@/utils/caroLogic"; 
 import { GameOverModal } from "@/components/GameOverModal";
 import { authService } from "@/services/auth.service";
 import UnifiedSidePanel from "@/components/games/UnifiedSidePanel";
 import { matchmakingService } from "@/services/matchmaking.service";
+import { useGameTheme } from "@/hooks/useGameTheme.jsx";
+import { ThemeSelector } from "@/components/ThemeSelector";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import confetti from "canvas-confetti";
 
 const formatTime = (secs) => {
   const mins = Math.floor(secs / 60);
@@ -30,6 +34,8 @@ const CaroGame = () => {
   const code = searchParams.get('code');
   const mode = searchParams.get('mode'); 
 
+  const { boardTheme, setBoardTheme, pieceSkin, themeConfig } = useGameTheme();
+  
   const [isGameOver, setIsGameOver] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(null);
   const [eloResult, setEloResult] = useState(null);
@@ -74,7 +80,6 @@ const CaroGame = () => {
   const [playerCount, setPlayerCount] = useState(1);
 
   // States Giao diện & Âm thanh (LocalStorage)
-  const [boardTheme, setBoardTheme] = useState(() => localStorage.getItem('boardTheme') || 'classic');
   const [isMusicEnabled, setIsMusicEnabled] = useState(() => localStorage.getItem('isMusicEnabled') === 'true');
   const [isSfxEnabled, setIsSfxEnabled] = useState(() => localStorage.getItem('isSfxEnabled') !== 'false');
   const [pieceColor, setPieceColor] = useState(() => localStorage.getItem('pieceColor') || 'auto');
@@ -93,11 +98,10 @@ const CaroGame = () => {
   }, [isMusicEnabled, bgMusic]);
 
   useEffect(() => {
-    localStorage.setItem('boardTheme', boardTheme);
     localStorage.setItem('isMusicEnabled', isMusicEnabled);
     localStorage.setItem('isSfxEnabled', isSfxEnabled);
     localStorage.setItem('pieceColor', pieceColor);
-  }, [boardTheme, isMusicEnabled, isSfxEnabled, pieceColor]);
+  }, [isMusicEnabled, isSfxEnabled, pieceColor]);
 
   const SOUND_ASSETS = {
     move: 'https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Move.mp3',
@@ -253,6 +257,7 @@ const CaroGame = () => {
       });
 
       socket.on("receive_game_over", ({ result, winnerId, message }) => {
+          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
           setIsGameOver(true);
           
           if (result === "draw") {
@@ -267,14 +272,28 @@ const CaroGame = () => {
           setIsModalOpen(true);
       });
 
+      socket.on("undo_executed", ({ currentTurn }) => {
+        handleUndo();
+        setCurrentTurnUserId(currentTurn);
+        toast.success("Nước đi đã được thu hồi.");
+      });
+
+      socket.on("undo_rejected", ({ message }) => {
+        toast.error(message);
+      });
+
       return () => {
         socket.off("game_room_joined");
+        socket.off("player_joined");
         socket.off("match_started");
         socket.off("turn_changed");
         socket.off("receive_move");
         socket.off("receive_draw_offer");
         socket.off("draw_rejected");
+        socket.off("receive_time_limit");
         socket.off("receive_game_over");
+        socket.off("undo_executed");
+        socket.off("undo_rejected");
         socket.off("player_joined");
         socket.off("player_left");
         socket.disconnect();
@@ -318,6 +337,23 @@ const CaroGame = () => {
     };
   }, [isSearching, navigate]);
 
+  // Socket listener cho ELO
+  useEffect(() => {
+    const handleEloUpdated = (data) => {
+        const myEloData = data.p1.userId === myUserId ? data.p1 : (data.p2.userId === myUserId ? data.p2 : null);
+        if (myEloData) {
+            setEloResult(myEloData);
+            if (data.p1.userId === myUserId) {
+                setPlayer1Stats(prev => ({ ...prev, elo: data.p1.newElo }));
+            } else if (data.p2.userId === myUserId) {
+                setPlayer2Stats(prev => ({ ...prev, elo: data.p2.newElo }));
+            }
+        }
+    };
+    socket.on("elo_updated", handleEloUpdated);
+    return () => socket.off("elo_updated", handleEloUpdated);
+  }, [myUserId]);
+
   // Trigger AI click khi đến lượt bot
   useEffect(() => {
     if (mode === 'ai') {
@@ -360,6 +396,7 @@ const CaroGame = () => {
               // Kiểm tra AI Win
               if (checkWin(newBoard, y, x, 'white')) {
                   setWinningLine(getWinningLine(newBoard, y, x, 'white'));
+                  confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
                   handleGameOver("lose", null, "Bot đã giành chiến thắng!");
                   return;
               }
@@ -470,6 +507,7 @@ const CaroGame = () => {
     // KIỂM TRA THẮNG
     if (checkWin(newBoard, row, col, currentColor)) {
         setWinningLine(getWinningLine(newBoard, row, col, currentColor));
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         playSfx('game-over');
         handleGameOver("win", myUserId, "Bạn đã giành chiến thắng!");
         return;
@@ -506,6 +544,7 @@ const CaroGame = () => {
   }, [matchId, isGameOver, isBlackTurn, isAiGameStarted]);
 
   const handleTimeout = (timeLeftRole) => {
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
       const amIPlayer1 = myRole === "player1";
       const isLose = (timeLeftRole === "player1" && amIPlayer1) || (timeLeftRole === "player2" && !amIPlayer1);
       handleGameOver(isLose ? "lose" : "win", isLose ? null : myUserId, "Hết thời gian! Bạn đã " + (isLose ? "thua." : "thắng."));
@@ -573,6 +612,40 @@ const CaroGame = () => {
     });
   }
 
+  const handleRequestUndo = () => {
+    if (isGameOver || moves.length === 0) return;
+    
+    if (mode === 'ai') {
+        // Nếu chơi với máy, lùi 2 nước (nếu máy vừa đi) hoặc 1 nước (nếu mình vừa đi)
+        handleUndo(); // Lùi nước của máy
+        if (isAiThinking) return; // Đang nghĩ thì ko undo được
+        handleUndo(); // Lùi nước của mình
+        toast.success("Đã lùi lại nước đi.");
+    } else if (roomId) {
+        socket.emit("request_undo", { roomId });
+        toast.info("Đã gửi yêu cầu đi lại.");
+    }
+  };
+
+  const handleUndo = () => {
+    setMoves(prev => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        const newMoves = prev.slice(0, -1);
+        
+        setBoard(currentBoard => {
+            const newBoard = currentBoard.map(r => [...r]);
+            newBoard[last.row][last.col] = null;
+            return newBoard;
+        });
+
+        setIsBlackTurn(last.color.toLowerCase() === 'black');
+        setLastMove(newMoves.length > 0 ? newMoves[newMoves.length - 1] : null);
+        setWinningLine([]);
+        return newMoves;
+    });
+  };
+
   return (
     <>
       <div className="h-full flex flex-col p-1 sm:p-2">
@@ -596,19 +669,17 @@ const CaroGame = () => {
                 onSquareClick={handleSquareClick} 
                 winningLine={winningLine}
                 hintMove={hintMove}
-                boardTheme={boardTheme}
-                pieceColor={pieceColor}
+                theme={themeConfig}
+                skin={pieceSkin}
                 myRole={myRole}
               />
               {isGameOver && (
                 <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 z-20 pointer-events-none px-4 sm:px-12 animate-in fade-in zoom-in-95 duration-500">
                   <div className="overflow-hidden rounded-xl border border-white/20 bg-black/60 backdrop-blur-md shadow-2xl">
                     <div className="flex items-center justify-center py-3 px-4 gap-4 relative">
-                      {/* Decorative elements - Fence style */}
                       <div className="flex items-center gap-1.5 opacity-40">
                         {[1,2,3].map(i => <div key={i} className="w-1 h-8 bg-white rounded-full" />)}
                       </div>
-                      
                       <div className="text-center relative z-10">
                         <h2 className="text-lg font-black text-white uppercase tracking-[0.2em] leading-none mb-1 drop-shadow-md">Kết thúc</h2>
                         <div className="flex items-center justify-center gap-2">
@@ -617,7 +688,6 @@ const CaroGame = () => {
                           <div className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]" />
                         </div>
                       </div>
-
                       <div className="flex items-center gap-1.5 opacity-40">
                         {[1,2,3].map(i => <div key={i} className="w-1 h-8 bg-white rounded-full" />)}
                       </div>
@@ -677,7 +747,7 @@ const CaroGame = () => {
               setPieceColor={setPieceColor}
               playSfx={playSfx}
             />
-            {/* Modal kết thúc trận đầu */}
+            {/* Modal kết thúc trận đấu */}
             <GameOverModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -687,25 +757,8 @@ const CaroGame = () => {
                 eloChange={eloResult?.eloChange}
                 newElo={eloResult?.newElo}
                 duration={gameStartTime ? Math.floor((Date.now() - gameStartTime) / 1000) : 0}
-                onExit={() => navigate('/ ')}
+                onExit={() => navigate('/dashboard')}
             />
-
-            {/* Socket listener cho ELO */}
-            {useEffect(() => {
-                const handleEloUpdated = (data) => {
-                    const myEloData = data.p1.userId === myUserId ? data.p1 : (data.p2.userId === myUserId ? data.p2 : null);
-                    if (myEloData) {
-                        setEloResult(myEloData);
-                        if (data.p1.userId === myUserId) {
-                            setPlayer1Stats(prev => ({ ...prev, elo: data.p1.newElo }));
-                        } else if (data.p2.userId === myUserId) {
-                            setPlayer2Stats(prev => ({ ...prev, elo: data.p2.newElo }));
-                        }
-                    }
-                };
-                socket.on("elo_updated", handleEloUpdated);
-                return () => socket.off("elo_updated", handleEloUpdated);
-            }, [myUserId])}
           </div>
         </div>
       </div>

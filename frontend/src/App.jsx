@@ -17,35 +17,38 @@ import Friends from "./pages/user/Friends";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AppLayout } from "./components/AppLayout";
+import { GameThemeProvider } from "@/hooks/useGameTheme.jsx";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Login />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+    <GameThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-          <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/friends" element={<Friends />} />
-            <Route path="/game/chess" element={<ChessGame />} />
-            <Route path="/game/xiangqi" element={<XiangqiGame />} />
-            <Route path="/game/caro" element={<CaroGame />} />
-            <Route path="/replay/:matchId" element={<ReplayGame />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/history" element={<MatchHistory />} />
-            <Route path="/rankings" element={<Rankings />} />
-          </Route>
+            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/friends" element={<Friends />} />
+              <Route path="/game/chess" element={<ChessGame />} />
+              <Route path="/game/xiangqi" element={<XiangqiGame />} />
+              <Route path="/game/caro" element={<CaroGame />} />
+              <Route path="/replay/:matchId" element={<ReplayGame />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/history" element={<MatchHistory />} />
+              <Route path="/rankings" element={<Rankings />} />
+            </Route>
 
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </GameThemeProvider>
   </QueryClientProvider>
 );
 

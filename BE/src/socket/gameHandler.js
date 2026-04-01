@@ -115,7 +115,7 @@ module.exports = (io, socket, onlineUsers, inGameUsers, broadcastStatusToFriends
             const rid = Number(roomId);
 
             inGameUsers.set(userId, rid);
-            broadcastStatusToFriends(userId, "in_game");
+            broadcastStatusToFriends(userId, socket.user.username, "in_game");
 
             const playerRecord = await RoomPlayer.findOne({
                 where: { room_id: rid, user_id: userId }
@@ -518,13 +518,15 @@ module.exports = (io, socket, onlineUsers, inGameUsers, broadcastStatusToFriends
 
             socket.leave(`game_room_${roomId}`);
             inGameUsers.delete(userId);
-            broadcastStatusToFriends(userId, "online");
+            broadcastStatusToFriends(userId, socket.user.username, "online");
         } catch (error) {
             console.error("[Game] leave error:", error);
         }
     });
 
+    // ===================================
     // CHAT
+    // ===================================
     socket.on("send_room_message", async ({ roomId, text }) => {
         try {
             await Chat.create({ room_id: roomId, user_id: socket.user.id, message: text });
@@ -538,6 +540,60 @@ module.exports = (io, socket, onlineUsers, inGameUsers, broadcastStatusToFriends
         } catch (e) { console.error(e); }
     });
 
+    // ===================================
+    // ĐI LẠI (Undo / Takeback)
+    // ===================================
+    socket.on("request_undo", ({ roomId }) => {
+        const roomKey = `game_room_${roomId}`;
+        socket.to(roomKey).emit("undo_request_received", {
+            userId: socket.user.id,
+            username: socket.user.username
+        });
+    });
+
+    socket.on("accept_undo", async ({ roomId, matchId }) => {
+        try {
+            const roomKey = `game_room_${roomId}`;
+            const turnState = roomTurnState.get(roomId);
+
+            if (turnState && turnState.moveCount > 0) {
+                // 1. Lùi moveCount
+                turnState.moveCount--;
+                
+                // 2. Trả lại lượt cho người vừa đi (người yêu cầu undo)
+                const requesterId = turnState.currentTurn === turnState.player1Id 
+                    ? turnState.player2Id 
+                    : turnState.player1Id;
+                
+                turnState.currentTurn = requesterId;
+
+                // 3. Xóa nước đi cuối trong buffer
+                if (turnState.moves_buffer.length > 0) {
+                    turnState.moves_buffer.pop();
+                }
+
+                // 4. Broadcast cho cả phòng thực hiện undo
+                io.to(roomKey).emit("undo_executed", {
+                    currentTurn: requesterId,
+                    moveCount: turnState.moveCount
+                });
+            }
+        } catch (error) {
+            console.error("[Game] accept_undo error:", error);
+        }
+    });
+
+    socket.on("reject_undo", ({ roomId }) => {
+        const roomKey = `game_room_${roomId}`;
+        socket.to(roomKey).emit("undo_rejected", {
+            username: socket.user.username,
+            message: "Đối thủ từ chối cho bạn đi lại."
+        });
+    });
+
+    // ===================================
+    // XỬ LÝ NGẮT KẾT NỐI KHI ĐANG CHƠI
+    // ===================================
     socket.on("disconnect", () => {
         if (socket.currentRoomId) {
             socket.to(`game_room_${socket.currentRoomId}`).emit("opponent_disconnected", { userId: socket.user.id, username: socket.user.username });

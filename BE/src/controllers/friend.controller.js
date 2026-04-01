@@ -114,6 +114,21 @@ const acceptFriendRequest = async (req, res) => {
             status: "accepted"
         });
 
+        // Gửi thông báo socket real-time nếu người gửi online
+        const io = req.app.get("io");
+        const users = req.app.get("onlineUsers");
+        if (io && users) {
+            const requesterSocketId = users.get(friendId);
+            if (requesterSocketId) {
+                const acceptor = await User.findByPk(userId, {
+                    attributes: ["user_id", "username", "full_name", "avatar_url"]
+                });
+                io.to(requesterSocketId).emit("friend_request_accepted", {
+                    fromUser: acceptor
+                });
+            }
+        }
+
         res.json({
             message: "Đã chấp nhận lời mời kết bạn!",
             friendship: friendRequest
