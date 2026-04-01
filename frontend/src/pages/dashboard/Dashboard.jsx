@@ -1,5 +1,5 @@
-import { useNavigate } from "react-router-dom";
-import { Crown, CircleDot, Grid3X3, TrendingUp, Trophy, Gamepad2, Loader2, Bot, Swords, Users, Copy } from "lucide-react";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { Crown, CircleDot, Grid3X3, TrendingUp, Trophy, Gamepad2, Loader2, Bot, Swords, Users, Copy, PlayCircle, ArrowRight, XCircle, MinusCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { userService } from "@/services/user.service";
@@ -16,45 +16,74 @@ import { toast } from "sonner";
 import GameInvitesList from "@/components/GameInvitesList";
 import { socket } from "@/lib/socket";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getRankFromElo, getRankColor } from "@/utils/rank";
 
 const gameCards = [
   {
     type: "chess",
-    title: "Chess",
-    description: "The classic game of strategy and tactics on an 8×8 board.",
+    title: "Cờ Vua",
+    description: "Trò chơi chiến thuật kinh điển trên bàn cờ 8×8.",
     icon: Crown,
     url: "/game/chess",
   },
   {
     type: "xiangqi",
-    title: "Xiangqi",
-    description: "Chinese Chess — battle across the river on a 9×10 board.",
+    title: "Cờ Tướng",
+    description: "Đấu trí bằng chiến thuật quân sự trên bàn cờ 9×10.",
     icon: CircleDot,
     url: "/game/xiangqi",
   },
   {
     type: "caro",
-    title: "Caro",
-    description: "Get five in a row on a 15×15 grid. Simple yet deep.",
+    title: "Cờ Caro",
+    description: "Xếp 5 quân thành hàng trên lưới 15×15. Đơn giản mà tinh tế.",
     icon: Grid3X3,
     url: "/game/caro",
   },
 ];
 
 const resultColors = {
-  win: "bg-emerald-100 text-emerald-700",
-  loss: "bg-red-100 text-red-700",
-  draw: "bg-amber-100 text-amber-700",
+  win: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  lose: "bg-rose-100 text-rose-700 border-rose-200",
+  draw: "bg-amber-100 text-amber-700 border-amber-200",
+  timeout: "bg-orange-100 text-orange-700 border-orange-200",
+  resign: "bg-slate-100 text-slate-700 border-slate-200",
+};
+
+const resultLabels = {
+  win: "Bạn thắng",
+  lose: "Bạn thua",
+  draw: "Hòa",
+  timeout: "Hết giờ",
+  resign: "Đầu hàng",
+};
+
+const resultIcons = {
+  win: Trophy,
+  lose: XCircle,
+  draw: MinusCircle,
+  timeout: MinusCircle,
+  resign: XCircle,
+};
+
+const gameTypeDisplayNames = {
+  "chess": "Cờ Vua",
+  "xiangqi": "Cờ Tướng",
+  "caro": "Cờ Caro",
+  "1": "Cờ Vua",
+  "2": "Cờ Tướng",
+  "3": "Cờ Caro"
 };
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [user, setUser] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // States cho Modal vÃ  Matchmaking
+  // States cho Modal và Matchmaking
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedGame, setSelectedGame] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -91,7 +120,7 @@ const Dashboard = () => {
     }
 
     socket.on("friend_status_changed", ({ userId, status }) => {
-      setFriends(prev => prev.map(f => 
+      setFriends(prev => prev.map(f =>
         f.user_id === userId ? { ...f, status } : f
       ));
     });
@@ -122,7 +151,7 @@ const Dashboard = () => {
             setIsModalOpen(false);
             toast.success("Đã tìm thấy trận đấu!");
             if (data.room?.room_id) {
-               navigate(`${selectedGame.url}?roomId=${data.room.room_id}&code=${data.room.room_code}`);
+              navigate(`${selectedGame.url}?roomId=${data.room.room_id}&code=${data.room.room_code}`);
             }
           }
         } catch (error) {
@@ -153,13 +182,19 @@ const Dashboard = () => {
 
   const handleJoinQueue = async () => {
     if (!selectedGame) return;
+    handleJoinQueueDirectly(selectedGame);
+  };
+
+  const handleJoinQueueDirectly = async (game) => {
     try {
-      const data = await matchmakingService.joinQueue(selectedGame.type);
+      const data = await matchmakingService.joinQueue(game.type);
       if (data.matched) {
         toast.success("Đã tìm thấy trận đấu!");
         setIsModalOpen(false);
-        navigate(`${selectedGame.url}?roomId=${data.room?.room_id}&code=${data.room?.room_code}`);
+        navigate(`${game.url}?roomId=${data.room?.room_id}&code=${data.room?.room_code}`);
       } else {
+        setSelectedGame(game);
+        setIsModalOpen(true);
         setIsSearching(true);
         toast.success("Đang tìm đối thủ...");
       }
@@ -185,8 +220,6 @@ const Dashboard = () => {
       setRoomCode(data.room?.room_code);
       setCurrentRoom(data.room);
       toast.success("Tạo phòng thành công!");
-      // Không chuyển hướng ngay lập tức nếu muốn mời bạn bè
-      // navigate(`${selectedGame.url}?roomId=${data.room?.room_id}&code=${data.room?.room_code}`);
     } catch (error) {
       toast.error(error.response?.data?.message || "Lỗi tạo phòng.");
     }
@@ -211,7 +244,7 @@ const Dashboard = () => {
   const handleJoinByCode = async () => {
     if (!inputCode) return;
     try {
-      const data = await roomService.joinRoom(inputCode);
+      const data = await roomService.joinRoom(inputCode, null, selectedGame?.type);
       toast.success("Vào phòng thành công!");
       setIsModalOpen(false);
       navigate(`${selectedGame.url}?roomId=${data.room?.room_id}&code=${data.room?.room_code}`);
@@ -244,55 +277,55 @@ const Dashboard = () => {
 
   return (
     <>
-      <div className="mx-auto max-w-5xl space-y-8">
+      <div className="mx-auto max-w-5xl px-4 py-6 space-y-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Welcome back, {user.full_name || user.username}</h1>
-          <p className="text-muted-foreground">Choose a game or review your stats.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Chào mừng bạn trở lại, {user.full_name || user.username}</h1>
+          <p className="text-muted-foreground mt-2">Chọn một trò chơi hoặc xem lại thống kê của bạn.</p>
         </div>
 
         {/* Danh sách lời mời chơi game */}
         <GameInvitesList />
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card>
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="rounded-lg bg-accent p-2.5">
-                <Gamepad2 className="h-5 w-5 text-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.total_matches}</p>
-                <p className="text-xs text-muted-foreground">Games Played</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="rounded-lg bg-accent p-2.5">
-                <TrendingUp className="h-5 w-5 text-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{winRate}%</p>
-                <p className="text-xs text-muted-foreground">Win Rate</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="rounded-lg bg-accent p-2.5">
-                <Trophy className="h-5 w-5 text-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{user.elo}</p>
-                <p className="text-xs text-muted-foreground">Elo Rating</p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Statistics by Game Type */}
+        <div>
+          <h2 className="mb-4 text-lg font-semibold">Thống kê theo trò chơi</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {gameCards.map((game) => {
+              const gameStat = user.gameStats?.find(s =>
+                s.game_type_id === (game.type === 'chess' ? 1 : game.type === 'xiangqi' ? 2 : 3)
+              ) || { elo: 0, matches: 0, wins: 0, losses: 0, draws: 0 };
+
+              return (
+                <Card key={game.type} className="overflow-hidden border-t-4" style={{ borderTopColor: game.type === 'chess' ? '#3b82f6' : game.type === 'xiangqi' ? '#ef4444' : '#10b981' }}>
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <game.icon className="h-4 w-4" /> {game.title}
+                    </CardTitle>
+                    <Badge variant="outline" className={`${getRankColor(getRankFromElo(gameStat.elo))} font-bold`}>
+                      {getRankFromElo(gameStat.elo)}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <div className="text-2xl font-bold">{gameStat.elo}</div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-tighter">Elo hiện tại</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-medium text-emerald-600">{gameStat.wins}W - {gameStat.losses}L</div>
+                        <p className="text-[10px] text-muted-foreground">{gameStat.matches} trận đã đấu</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
 
         {/* Game Selection */}
         <div>
-          <h2 className="mb-4 text-lg font-semibold">Play a Game</h2>
+          <h2 className="mb-4 text-lg font-semibold">Bắt đầu chơi</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {gameCards.map((game) => (
               <Card
@@ -314,28 +347,73 @@ const Dashboard = () => {
 
         {/* Recent Matches */}
         <div>
-          <h2 className="mb-4 text-lg font-semibold">Recent Matches</h2>
-          <Card>
+          <h2 className="mb-4 text-lg font-semibold">Trận đấu gần đây</h2>
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="divide-y">
-                {matches.slice(0, 5).map((match) => (
-                  <div key={match.match_id} className="flex items-center justify-between px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="secondary" className="text-xs font-normal">
-                        {gameTypeLabels[match.game_type] || match.game_type}
-                      </Badge>
-                      <span className="text-sm">Trận đấu ngày {new Date(match.end_time).toLocaleDateString()}</span>
+                {matches.slice(0, 5).map((match) => {
+                  const matchTime = match.end_time || match.start_time || match.created_at;
+                  const dateObj = matchTime ? new Date(matchTime) : new Date();
+                  const resultKey = match.user_result || match.result || "draw";
+                  const displayResult = resultLabels[resultKey] || resultKey;
+                  const resultClassName = resultColors[resultKey] || "bg-gray-100 text-gray-600";
+                  const ResultIcon = resultIcons[resultKey];
+                  const opponent = match.player1_id === user.user_id ? match.player2 : match.player1;
+
+                  return (
+                    <div 
+                      key={match.match_id || match.id} 
+                      className="flex items-center justify-between px-5 py-3.5 hover:bg-muted/50 transition-colors cursor-pointer group"
+                      onClick={() => navigate(`/replay/${match.match_id || match.id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9 border shadow-sm">
+                          <AvatarImage src={opponent?.avatar_url} />
+                          <AvatarFallback className="text-[10px] font-bold bg-muted text-muted-foreground">
+                            {opponent?.username?.slice(0, 2).toUpperCase() || "??"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2 text-sm font-semibold">
+                            <span className="group-hover:text-primary transition-colors">vs {opponent?.full_name || opponent?.username || "Ẩn danh"}</span>
+                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-bold h-4 bg-primary/10 text-primary border-none">
+                              {gameTypeDisplayNames[match.game_type_id] || "Game"}
+                            </Badge>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground opacity-70">
+                            {dateObj.toLocaleDateString('vi-VN')} {dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold flex items-center gap-1.5 shadow-sm border ${resultClassName}`}>
+                          {ResultIcon && <ResultIcon className="h-3 w-3" />}
+                          {displayResult}
+                        </span>
+                        <div className="opacity-0 group-hover:opacity-100 transition-all transform translate-x-1 group-hover:translate-x-0 hidden sm:block">
+                           <PlayCircle className="h-5 w-5 text-primary" />
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${resultColors[match.result] || "bg-gray-100"}`}>
-                        {match.result ? match.result.charAt(0).toUpperCase() + match.result.slice(1) : "Unknown"}
-                      </span>
-                    </div>
+                  );
+                })}
+
+                {matches.length > 5 && (
+                  <div 
+                    className="px-5 py-4 text-center border-t hover:bg-muted/20 transition-colors cursor-pointer group"
+                    onClick={() => navigate('/history')}
+                  >
+                    <span className="text-xs font-bold text-primary flex items-center justify-center gap-1.5">
+                      Xem tất cả lịch sử đấu
+                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                    </span>
                   </div>
-                ))}
+                )}
+
                 {matches.length === 0 && (
-                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-                    No recent matches.
+                  <div className="px-5 py-12 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+                    <Swords className="h-8 w-8 opacity-20" />
+                    <p>Chưa có trận đấu nào gần đây.</p>
                   </div>
                 )}
               </div>
@@ -367,11 +445,11 @@ const Dashboard = () => {
                   Phòng đã tạo!
                 </div>
                 <p className="text-xl font-black tracking-widest">{roomCode}</p>
-                
+
                 <div className="w-full space-y-4">
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => { navigator.clipboard.writeText(roomCode); toast.success("Đã copy!"); }}>
-                       Copy Mã
+                      Copy Mã
                     </Button>
                     <Button className="flex-1" onClick={handleEnterRoom}>Vào Phòng</Button>
                   </div>
@@ -390,9 +468,8 @@ const Dashboard = () => {
                                     {friend.username.slice(0, 2).toUpperCase()}
                                   </AvatarFallback>
                                 </Avatar>
-                                <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-background z-10 ${
-                                  friend.status === 'in_game' ? 'bg-amber-500' : 'bg-green-500'
-                                }`} />
+                                <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-background z-10 ${friend.status === 'in_game' ? 'bg-amber-500' : 'bg-green-500'
+                                  }`} />
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-xs font-medium truncate max-w-[100px]">{friend.username}</span>
@@ -401,9 +478,9 @@ const Dashboard = () => {
                                 )}
                               </div>
                             </div>
-                            <Button 
-                              size="xs" 
-                              className="h-7 text-[10px]" 
+                            <Button
+                              size="xs"
+                              className="h-7 text-[10px]"
                               disabled={friend.status === 'in_game'}
                               onClick={() => handleSendInvite(friend.user_id)}
                             >
@@ -422,35 +499,53 @@ const Dashboard = () => {
               </div>
             ) : (
               <>
-                <Button variant="outline" className="flex items-center justify-start gap-3 h-14" onClick={handlePlayAI}>
-                  <Bot className="h-6 w-6 text-primary" />
+                <Button 
+                  variant="outline" 
+                  className="flex items-center justify-start gap-4 h-16 px-4 border-muted hover:border-primary hover:bg-primary/5 transition-all group focus-visible:ring-0 focus-visible:ring-offset-0 outline-none" 
+                  onClick={handlePlayAI}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent group-hover:bg-primary/10 transition-colors">
+                    <Bot className="h-5 w-5 text-primary" />
+                  </div>
                   <div className="text-left">
-                    <p className="font-semibold text-sm">Chơi với Máy</p>
+                    <p className="font-bold text-sm">Chơi với Máy</p>
                     <p className="text-xs text-muted-foreground">Luyện tập với bot thông minh.</p>
                   </div>
                 </Button>
 
-                <Button variant="outline" className="flex items-center justify-start gap-3 h-14" onClick={handleJoinQueue}>
-                  <Swords className="h-6 w-6 text-primary" />
+                <Button 
+                  variant="outline" 
+                  className="flex items-center justify-start gap-4 h-16 px-4 border-muted hover:border-primary hover:bg-primary/5 transition-all group focus-visible:ring-0 focus-visible:ring-offset-0 outline-none" 
+                  onClick={handleJoinQueue}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent group-hover:bg-primary/10 transition-colors">
+                    <Swords className="h-5 w-5 text-primary" />
+                  </div>
                   <div className="text-left">
-                    <p className="font-semibold text-sm">Ghép Trận</p>
+                    <p className="font-bold text-sm">Ghép Trận</p>
                     <p className="text-xs text-muted-foreground">Tìm đối thủ xứng tầm trực tuyến.</p>
                   </div>
                 </Button>
 
-                <Button variant="outline" className="flex items-center justify-start gap-3 h-14" onClick={handleCreateRoom}>
-                  <Users className="h-6 w-6 text-primary" />
+                <Button 
+                  variant="outline" 
+                  className="flex items-center justify-start gap-4 h-16 px-4 border-muted hover:border-primary hover:bg-primary/5 transition-all group focus-visible:ring-0 focus-visible:ring-offset-0 outline-none" 
+                  onClick={handleCreateRoom}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent group-hover:bg-primary/10 transition-colors">
+                    <Users className="h-5 w-5 text-primary" />
+                  </div>
                   <div className="text-left">
-                    <p className="font-semibold text-sm">Chơi với Bạn Bè</p>
+                    <p className="font-bold text-sm">Chơi với Bạn Bè</p>
                     <p className="text-xs text-muted-foreground">Tạo phòng và mời bạn bè tham gia.</p>
                   </div>
                 </Button>
 
                 <div className="flex items-center gap-2 pt-2 border-t mt-2">
-                  <Input 
-                    placeholder="Nhập mã phòng kích hoạt..." 
-                    value={inputCode} 
-                    onChange={e => setInputCode(e.target.value.toUpperCase())} 
+                  <Input
+                    placeholder="Nhập mã phòng kích hoạt..."
+                    value={inputCode}
+                    onChange={e => setInputCode(e.target.value.toUpperCase())}
                   />
                   <Button onClick={handleJoinByCode}>Vào</Button>
                 </div>

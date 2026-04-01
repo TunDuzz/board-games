@@ -1,21 +1,22 @@
 export const getRankFromElo = (elo) => {
-    if (elo === undefined || elo === null) return "Unranked";
-    if (elo < 1000) return "Bronze";
-    if (elo < 1300) return "Silver";
-    if (elo < 1600) return "Gold";
-    if (elo < 1900) return "Platinum";
-    if (elo < 2200) return "Diamond";
-    return "Master";
+    if (elo === undefined || elo === null) return "Đồng";
+    const e = Number(elo);
+    if (e < 200) return "Đồng";
+    if (e < 500) return "Bạc";
+    if (e < 1000) return "Vàng";
+    if (e < 2000) return "Bạch Kim";
+    if (e < 3000) return "Kim Cương";
+    return "Cao Thủ";
 };
 
 export const getRankColor = (rank) => {
     switch (rank) {
-        case "Bronze": return "text-orange-700 bg-orange-100";
-        case "Silver": return "text-slate-700 bg-slate-200";
-        case "Gold": return "text-yellow-700 bg-yellow-100";
-        case "Platinum": return "text-cyan-700 bg-cyan-100";
-        case "Diamond": return "text-blue-700 bg-blue-100";
-        case "Master": return "text-purple-700 bg-purple-200";
-        default: return "text-gray-700 bg-gray-100";
+        case "Đồng": return "text-orange-900 bg-orange-900/10 border-orange-900/20";
+        case "Bạc": return "text-slate-500 bg-slate-500/10 border-slate-500/20";
+        case "Vàng": return "text-amber-500 bg-amber-500/10 border-amber-500/20";
+        case "Bạch Kim": return "text-cyan-600 bg-cyan-600/10 border-cyan-600/20";
+        case "Kim Cương": return "text-blue-600 bg-blue-600/10 border-blue-600/20";
+        case "Cao Thủ": return "text-orange-600 bg-orange-600/10 border-orange-600/20";
+        default: return "text-slate-500 bg-slate-500/10 border-slate-500/20";
     }
 };

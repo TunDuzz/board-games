@@ -4,9 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { userService } from "@/services/user.service";
 import { getRankFromElo, getRankColor } from "@/utils/rank";
-import { Camera, Loader2, Save, KeyRound } from "lucide-react";
+import { Camera, Loader2, Save, KeyRound, Crown, CircleDot, Grid3X3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -132,7 +133,8 @@ const Profile = () => {
     );
   }
 
-  const stats = user.UserStats || { total_matches: 0, wins: 0, losses: 0, draws: 0 };
+  const stats = user.UserStat || { total_matches: 0, wins: 0, losses: 0, draws: 0 };
+  const gameStats = user.gameStats || [];
 
   return (
     <>
@@ -276,29 +278,72 @@ const Profile = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Overall Stats</CardTitle>
+            <CardTitle className="text-base font-semibold">Thống kê tổng quát</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div className="rounded-xl border bg-card/50 p-4 text-center shadow-sm">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Played</p>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Đã chơi</p>
                 <p className="mt-2 text-2xl font-black">{stats.total_matches}</p>
               </div>
               <div className="rounded-xl border bg-emerald-50/50 dark:bg-emerald-950/20 p-4 text-center shadow-sm">
-                <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Wins</p>
+                <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Thắng</p>
                 <p className="mt-2 text-2xl font-black text-emerald-600">{stats.wins}</p>
               </div>
               <div className="rounded-xl border bg-red-50/50 dark:bg-red-950/20 p-4 text-center shadow-sm">
-                <p className="text-xs font-bold text-red-500 uppercase tracking-widest">Losses</p>
+                <p className="text-xs font-bold text-red-500 uppercase tracking-widest">Thua</p>
                 <p className="mt-2 text-2xl font-black text-red-500">{stats.losses}</p>
               </div>
               <div className="rounded-xl border bg-amber-50/50 dark:bg-amber-950/20 p-4 text-center shadow-sm">
-                <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">Draws</p>
+                <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">Hòa</p>
                 <p className="mt-2 text-2xl font-black text-amber-600">{stats.draws}</p>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Detailed Game Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { id: 1, name: "Cờ Vua", type: 'chess', icon: Crown },
+            { id: 2, name: "Cờ Tướng", type: 'xiangqi', icon: CircleDot },
+            { id: 3, name: "Cờ Caro", type: 'caro', icon: Grid3X3 }
+          ].map(game => {
+            const gStat = gameStats.find(s => s.game_type_id === game.id) || { elo: 0, matches: 0, wins: 0, losses: 0, draws: 0 };
+            const winRate = gStat.matches > 0 ? Math.round((gStat.wins / gStat.matches) * 100) : 0;
+            
+            return (
+              <Card key={game.id} className="relative overflow-hidden border-l-4" style={{ borderLeftColor: game.type === 'chess' ? '#3b82f6' : game.type === 'xiangqi' ? '#ef4444' : '#10b981' }}>
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-sm font-bold flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                       <game.icon className="h-4 w-4" />
+                       {game.name}
+                    </div>
+                    <Badge variant="outline" className={`${getRankColor(getRankFromElo(gStat.elo))} text-[10px]`}>
+                      {getRankFromElo(gStat.elo)}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-2xl font-black">{gStat.elo}</span>
+                    <span className="text-xs text-muted-foreground font-mono">Elo</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 text-[10px] text-center font-bold">
+                    <div className="bg-emerald-100 text-emerald-700 py-1 rounded">{gStat.wins}W</div>
+                    <div className="bg-red-100 text-red-700 py-1 rounded">{gStat.losses}L</div>
+                    <div className="bg-amber-100 text-amber-700 py-1 rounded">{gStat.draws}D</div>
+                  </div>
+                  <div className="mt-3 flex justify-between items-center text-[10px] text-muted-foreground">
+                    <span>{gStat.matches} ván đấu</span>
+                    <span className="font-bold text-foreground">{winRate}% Thắng</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </>
   );

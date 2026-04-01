@@ -139,7 +139,7 @@ exports.getRoomsByGameType = async (req, res) => {
 exports.joinRoom = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { roomIdOrCode, password } = req.body;
+        const { roomIdOrCode, password, gameTypeName } = req.body;
 
         if (!roomIdOrCode) {
             return res.status(400).json({ message: "Thiếu thông tin phòng cần vào" });
@@ -158,6 +158,17 @@ exports.joinRoom = async (req, res) => {
 
         if (!room) {
             return res.status(404).json({ message: "Không tìm thấy phòng" });
+        }
+
+        // --- MỚI: KIỂM TRA LOẠI GAME ---
+        if (gameTypeName) {
+            const gameType = await GameType.findOne({ where: { name: gameTypeName } });
+            if (gameType && room.game_type_id !== gameType.game_type_id) {
+                const roomType = await GameType.findByPk(room.game_type_id);
+                return res.status(400).json({ 
+                    message: `Mã phòng này dành cho trò chơi "${roomType?.description || roomType?.name}", không phải trò chơi hiện tại.` 
+                });
+            }
         }
 
         // Kiểm tra xem user đã ở trong phòng này chưa

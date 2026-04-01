@@ -11,15 +11,19 @@ export const userService = {
         return response.data;
     },
 
-    async getMatchHistory() {
-        const response = await http.get('/user/history');
+    async getMatchHistory(gameType) {
+        const params = gameType ? { gameType } : {};
+        const response = await http.get('/user/history', { params });
         return response.data;
     },
 
-    async getRankings() {
-        const response = await http.get('/user/rankings');
+
+    async getRankings(gameType) {
+        const params = gameType ? { gameType } : {};
+        const response = await http.get('/user/rankings', { params });
         return response.data;
     },
+
 
     async getMatchMoves(matchId) {
         const response = await http.get(`/user/match/${matchId}/moves`);

@@ -1,5 +1,5 @@
 import { toast as sonnerToast } from "sonner";
-import React, { useState, useEffect } from "react"; // Added useEffect
+import React, { useState, useEffect } from "react"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlayerInfoBar } from "@/components/PlayerInfoBar";
@@ -9,12 +9,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { GameRoomPanel } from "@/components/GameRoomPanel";
 import ChatBox from "@/components/ChatBox";
-import { socket } from "@/lib/socket"; // Thêm client socket
+import { socket } from "@/lib/socket"; 
 import { aiService } from "@/services/ai.service";
-import { toast } from "sonner";
-import { Loader2, Zap } from "lucide-react";
+import { Loader2, Zap, Handshake, Play, X } from "lucide-react";
 import { GameOverModal } from "@/components/GameOverModal";
 import { authService } from "@/services/auth.service";
+import UnifiedSidePanel from "@/components/games/UnifiedSidePanel";
+import { matchmakingService } from "@/services/matchmaking.service";
 
 const formatTime = (secs) => {
   const mins = Math.floor(secs / 60);
@@ -28,13 +29,23 @@ const ChessGame = () => {
   const [board, setBoard] = useState(INITIAL_CHESS_BOARD);
   const boardRef = React.useRef(board);
   const [turn, setTurn] = useState('white');
+  const turnRef = React.useRef(turn);
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [validMoves, setValidMoves] = useState([]);
   const [history, setHistory] = useState([]);
+  const historyRef = React.useRef(history);
 
   React.useEffect(() => {
     boardRef.current = board;
   }, [board]);
+
+  React.useEffect(() => {
+    turnRef.current = turn;
+  }, [turn]);
+
+  React.useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
   const [isGameOver, setIsGameOver] = useState(false);
 
   const [searchParams] = useSearchParams();
@@ -64,8 +75,65 @@ const ChessGame = () => {
   const [player2Time, setPlayer2Time] = useState(1800);
   const [matchTimeLimit, setMatchTimeLimit] = useState(30);
 
-  const [player1Name, setPlayer1Name] = useState("Người chơi 1");
+  const [player1Name, setPlayer1Name] = useState(currentUser?.username || "Người chơi 1");
   const [player2Name, setPlayer2Name] = useState("Người chơi 2");
+  const [player1Stats, setPlayer1Stats] = useState({ 
+    elo: currentUser?.elo || 0, 
+    rank: currentUser?.rank || "Đồng" 
+  });
+  const [player2Stats, setPlayer2Stats] = useState({ elo: 0, rank: "Đồng" });
+  const [isAiGameStarted, setIsAiGameStarted] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [playerCount, setPlayerCount] = useState(1);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchTime, setSearchTime] = useState(0);
+
+  // States Giao diện & Âm thanh (LocalStorage)
+  const [boardTheme, setBoardTheme] = useState(() => localStorage.getItem('boardTheme') || 'classic');
+  const [isMusicEnabled, setIsMusicEnabled] = useState(() => localStorage.getItem('isMusicEnabled') === 'true');
+  const [isSfxEnabled, setIsSfxEnabled] = useState(() => localStorage.getItem('isSfxEnabled') !== 'false');
+  const [pieceColor, setPieceColor] = useState(() => localStorage.getItem('pieceColor') || 'auto');
+
+  // Quản lý âm thanh
+  const [bgMusic] = useState(() => new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'));
+  
+  // States Thống kê trận đấu
+  const [gameStartTime, setGameStartTime] = useState(null);
+  const [whiteCaptures, setWhiteCaptures] = useState(0);
+  const [blackCaptures, setBlackCaptures] = useState(0);
+  const [eloResult, setEloResult] = useState(null);
+
+  useEffect(() => {
+    bgMusic.loop = true;
+    bgMusic.volume = 0.2;
+    if (isMusicEnabled) {
+      bgMusic.play().catch(e => console.log("Audio play blocked by browser. User interaction required."));
+    } else {
+      bgMusic.pause();
+    }
+  }, [isMusicEnabled, bgMusic]);
+
+  useEffect(() => {
+    localStorage.setItem('boardTheme', boardTheme);
+    localStorage.setItem('isMusicEnabled', isMusicEnabled);
+    localStorage.setItem('isSfxEnabled', isSfxEnabled);
+    localStorage.setItem('pieceColor', pieceColor);
+  }, [boardTheme, isMusicEnabled, isSfxEnabled, pieceColor]);
+
+  const SOUND_ASSETS = {
+    move: 'https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Move.mp3',
+    capture: 'https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Capture.mp3',
+    check: 'https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Check.mp3',
+    'game-over': 'https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/GenericNotify.mp3'
+  };
+
+  const playSfx = (type) => {
+    if (!isSfxEnabled) return;
+    const url = SOUND_ASSETS[type] || `/${type}.mp3`;
+    const sfx = new Audio(url);
+    sfx.volume = 0.6;
+    sfx.play().catch(e => {});
+  };
 
   // ==========================================
   // 1. KẾT NỐI SOCKET CHO PHÒNG ONLINE
@@ -75,26 +143,105 @@ const ChessGame = () => {
       socket.connect();
       socket.emit("join_game_room", { roomId });
 
-      socket.on("game_room_joined", ({ role, players, match }) => {
+      socket.on("game_room_joined", ({ role, players, match, chatHistory }) => {
         setMyRole(role);
         toast({ title: `Bạn là ${role === "player1" ? "Trắng (White)" : "Đen (Black)"}` });
 
         if (players) {
             const p1 = players.find(p => p.role === "player1");
             const p2 = players.find(p => p.role === "player2");
-            if (p1) setPlayer1Name(p1.username);
-            if (p2) setPlayer2Name(p2.username);
+            if (p1) {
+              setPlayer1Name(p1.username);
+              setPlayer1Stats({ elo: p1.elo, rank: p1.rank });
+            }
+            if (p2) {
+              setPlayer2Name(p2.username);
+              setPlayer2Stats({ elo: p2.elo, rank: p2.rank });
+            }
+            setPlayerCount(players.length);
+        }
+
+        if (chatHistory) {
+          setChatHistory(chatHistory);
         }
 
         if (match) {
             setMatchId(match.match_id);
             if (match.currentTurn) setCurrentTurnUserId(match.currentTurn);
+
+            // Reconstruct board from history
+            if (match.moves && match.moves.length > 0) {
+                let currentBoard = INITIAL_CHESS_BOARD.map(r => [...r]);
+                let currentHistory = [];
+                
+                match.moves.forEach(m => {
+                    const moveData = typeof m.move_data === "string" ? JSON.parse(m.move_data) : m.move_data;
+                    if (moveData && moveData.from && moveData.to) {
+                        const { from, to } = moveData;
+                        const piece = currentBoard[from.row][from.col];
+
+                        if (piece) {
+                            // 1. Handle special moves BEFORE moving the piece
+                            
+                            // Promotion (Pawn reaches end)
+                            let pieceToPlace = piece;
+                            if (piece.toLowerCase() === 'p' && (to.row === 0 || to.row === 7)) {
+                                pieceToPlace = piece === 'P' ? 'Q' : 'q';
+                            }
+
+                            // Castling (King moves 2 columns)
+                            if (piece.toLowerCase() === 'k' && Math.abs(to.col - from.col) === 2) {
+                                const backRank = to.row;
+                                if (to.col === 6) { // Kingside
+                                    currentBoard[backRank][5] = currentBoard[backRank][7];
+                                    currentBoard[backRank][7] = null;
+                                } else if (to.col === 2) { // Queenside
+                                    currentBoard[backRank][3] = currentBoard[backRank][0];
+                                    currentBoard[backRank][0] = null;
+                                }
+                            }
+
+                            // En Passant (Pawn moves diagonally to empty square)
+                            if (piece.toLowerCase() === 'p' && from.col !== to.col && !currentBoard[to.row][to.col]) {
+                                currentBoard[from.row][to.col] = null;
+                            }
+
+                            // 2. Perform the main move
+                            currentBoard[to.row][to.col] = pieceToPlace;
+                            currentBoard[from.row][from.col] = null;
+
+                            currentHistory.push({
+                                piece, from, to,
+                                san: getNotation(piece, from.row, from.col, to.row, to.col)
+                            });
+                        }
+                    }
+                });
+                
+                setBoard(currentBoard);
+                setHistory(currentHistory);
+                if (currentHistory.length > 0) {
+                    setLastMove(currentHistory[currentHistory.length - 1]);
+                }
+                // Chess: White (player1) goes first
+                setTurn(currentHistory.length % 2 === 0 ? 'white' : 'black');
+            }
+            if (match.player1Time) setPlayer1Time(match.player1Time);
+            if (match.player2Time) setPlayer2Time(match.player2Time);
         }
       });
 
       socket.on("player_joined", ({ username, role }) => {
           if (role === "player2") setPlayer2Name(username);
           else if (role === "player1") setPlayer1Name(username);
+          setPlayerCount(prev => Math.min(prev + 1, 2));
+      });
+
+      socket.on("player_left", ({ userId }) => {
+          setPlayerCount(prev => Math.max(prev - 1, 1));
+          // Reset opponent name if they left
+          if (myRole === 'player1') setPlayer2Name("Người chơi 2");
+          else setPlayer1Name("Người chơi 1");
       });
 
       socket.on("match_started", ({ match_id, firstTurn, players }) => {
@@ -108,15 +255,18 @@ const ChessGame = () => {
         }
       });
 
-      socket.on("turn_changed", ({ currentTurn }) => {
+      socket.on("turn_changed", ({ currentTurn, player1Time, player2Time }) => {
         setCurrentTurnUserId(currentTurn);
+        if (player1Time !== undefined) setPlayer1Time(player1Time);
+        if (player2Time !== undefined) setPlayer2Time(player2Time);
       });
 
       socket.on("receive_move", ({ moveData }) => {
         const move = moveData;
         if (move && move.from && move.to) {
             setLastMove(move); // Ghi nhận nước đi cuối để highlight
-            executeMove(move.from.row, move.from.col, move.to.row, move.to.col, false); 
+            // Dùng force = true để ép áp dụng nước đi từ đối thủ mà không cần validation (đánh từ server là đã valid)
+            executeMove(move.from.row, move.from.col, move.to.row, move.to.col, false, true); 
         }
       });
 
@@ -125,7 +275,16 @@ const ChessGame = () => {
               duration: 10000,
               action: {
                   label: "Đồng ý",
-                  onClick: () => socket.emit("accept_draw", { roomId, matchId })
+                  onClick: () => {
+                      const duration = gameStartTime ? Math.floor((Date.now() - gameStartTime) / 1000) : 0;
+                      socket.emit("accept_draw", { 
+                          roomId, 
+                          matchId,
+                          duration,
+                          p1Captures: whiteCaptures,
+                          p2Captures: blackCaptures
+                      });
+                  }
               },
               cancel: {
                   label: "Từ chối",
@@ -168,19 +327,75 @@ const ChessGame = () => {
         socket.off("receive_draw_offer");
         socket.off("draw_rejected");
         socket.off("receive_game_over");
+        socket.off("player_joined");
+        socket.off("player_left");
         socket.disconnect();
       };
     }
   }, [roomId, myUserId, matchId]);
 
+  // Effect for matchmaking polling
+  useEffect(() => {
+    let interval;
+    let timerInterval;
+
+    if (isSearching) {
+      setSearchTime(0);
+      timerInterval = setInterval(() => {
+        setSearchTime(prev => prev + 1);
+      }, 1000);
+
+      interval = setInterval(async () => {
+        try {
+          const data = await matchmakingService.checkStatus();
+          if (data.matched) {
+            clearInterval(interval);
+            clearInterval(timerInterval);
+            setIsSearching(false);
+            sonnerToast.success("Đã tìm thấy đối thủ!");
+            if (data.room?.room_id) {
+               navigate(`/game/chess?roomId=${data.room.room_id}&code=${data.room.room_code}`);
+            }
+          }
+        } catch (error) {
+          clearInterval(interval);
+          clearInterval(timerInterval);
+          setIsSearching(false);
+        }
+      }, 3000);
+    }
+    return () => {
+      clearInterval(interval);
+      clearInterval(timerInterval);
+    };
+  }, [isSearching, navigate]);
+
   // ==========================================
   // 2. TRIGGER AI CHO BOT MODE
   // ==========================================
   useEffect(() => {
-    if (mode === 'ai' && turn === 'black' && !isAiThinking) {
-        fetchAiMove();
+    if (mode === 'ai') {
+        setMyRole('player1');
+        
+        // Cập nhật thông tin Bot dựa trên độ khó
+        const aiPersonas = {
+            easy: { name: "Bot Gà Con", elo: 400, rank: "Đồng" },
+            medium: { name: "Bot Sói Xám", elo: 1600, rank: "Bạch Kim" },
+            hard: { name: "Bot Rồng Lửa", elo: 2800, rank: "Thách Đấu" }
+        };
+        const persona = aiPersonas[difficulty] || aiPersonas.medium;
+        setPlayer2Name(persona.name);
+        setPlayer2Stats({ elo: persona.elo, rank: persona.rank });
+
+        if (turn === 'black' && !isAiThinking && !isGameOver) {
+            // Thêm delay 1.2s trước khi máy bắt đầu tính toán/đi
+            const timer = setTimeout(() => {
+                fetchAiMove();
+            }, 1200);
+            return () => clearTimeout(timer);
+        }
     }
-  }, [turn, mode]);
+  }, [turn, mode, isGameOver, difficulty]);
 
   const fetchAiMove = async () => {
       setIsAiThinking(true);
@@ -204,6 +419,12 @@ const ChessGame = () => {
 
   const handleSquareClick = (row, col) => {
     if (isGameOver) return;
+
+    // CHẶN DI CHUYỂN KHI CHƯA BẮT ĐẦU (Nếu ở chế độ Online)
+    if (roomId && !matchId) return;
+
+    // CHẶN DI CHUYỂN KHI CHƯA BẮT ĐẦU (Nếu ở chế độ AI)
+    if (mode === 'ai' && !isAiGameStarted) return;
 
     // 1. Chặn click khi đến lượt bot/AI
     if (mode === 'ai' && turn === 'black') return;
@@ -238,15 +459,44 @@ const ChessGame = () => {
     }
   };
 
-  const executeMove = (fromRow, fromCol, toRow, toCol, shouldEmit = true) => {
-    const newBoard = boardRef.current.map(r => [...r]);
-    const piece = board[fromRow][fromCol];
+  const executeMove = (fromRow, fromCol, toRow, toCol, shouldEmit = true, isForce = false) => {
+    const currentBoard = boardRef.current;
+    const currentHistory = historyRef.current;
+    const currentTurn = turnRef.current;
     
-    // Tính toán moveInfo ngay tại đây để hỗ trợ việc truyền từ socket (khi validMoves rỗng)
-    const movesOnSquare = getValidMoves(board, fromRow, fromCol, history);
-    const moveInfo = movesOnSquare.find(m => m.row === toRow && m.col === toCol);
+    // Ghi nhận thời gian bắt đầu khi có nước đi đầu tiên
+    if (!gameStartTime) {
+        setGameStartTime(Date.now());
+    }
 
-    if (!moveInfo) return; // Bảo vệ nếu nước đi không hợp lệ
+    // Kiểm tra xem có ăn quân không
+    const capturedPiece = currentBoard[toRow][toCol];
+    if (capturedPiece) {
+        if (currentTurn === 'white') setWhiteCaptures(prev => prev + 1);
+        else setBlackCaptures(prev => prev + 1);
+    }
+
+    const newBoard = currentBoard.map(row => [...row]);
+    const piece = newBoard[fromRow][fromCol];
+    if (!piece) return;
+
+    // Tính toán moveInfo
+    let moveInfo = null;
+    if (!isForce) {
+        // Nếu là nước đi của mình, cần validate
+        const movesOnSquare = getValidMoves(currentBoard, fromRow, fromCol, currentHistory);
+        moveInfo = movesOnSquare.find(m => m.row === toRow && m.col === toCol);
+        if (!moveInfo) return; 
+    } else {
+        // Nếu là nước đi từ server, tự suy luận các thuộc tính đặc biệt
+        moveInfo = {
+            row: toRow,
+            col: toCol,
+            isCastling: (piece.toLowerCase() === 'k' && Math.abs(toCol - fromCol) === 2) 
+                ? (toCol === 6 ? 'king' : 'queen') : null,
+            isEnPassant: (piece.toLowerCase() === 'p' && fromCol !== toCol && !currentBoard[toRow][toCol])
+        };
+    }
 
     setLastMove({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } });
 
@@ -271,13 +521,20 @@ const ChessGame = () => {
       newBoard[fromRow][toCol] = null;
     }
 
+    // Âm thanh
+    if (currentBoard[toRow][toCol]) {
+      playSfx('capture');
+    } else {
+      playSfx('move');
+    }
+
     // Xử lý Phong cấp (Tạm thời tự động lên Hậu)
     if (piece.toLowerCase() === 'p' && (toRow === 0 || toRow === 7)) {
       newBoard[toRow][toCol] = piece === 'P' ? 'Q' : 'q';
     }
 
-    const nextTurn = turn === 'white' ? 'black' : 'white';
-    const newHistory = [...history, {
+    const nextTurn = currentTurn === 'white' ? 'black' : 'white';
+    const newHistory = [...currentHistory, {
       piece, from: { row: fromRow, col: fromCol },
       to: { row: toRow, col: toCol },
       san: getNotation(piece, fromRow, fromCol, toRow, toCol)
@@ -285,19 +542,8 @@ const ChessGame = () => {
 
     // Kiểm tra Chiếu bí sau khi đi
     if (isCheckmate(newBoard, nextTurn, newHistory)) {
-      setIsGameOver(true);
-      setModalResult("win");
-      setModalMessage(`Chiếu bí! ${turn === 'white' ? 'Trắng' : 'Đen'} giành chiến thắng!`);
-      setIsModalOpen(true);
-
-      if (shouldEmit && roomId) {
-          socket.emit("game_over", { 
-             roomId, 
-             matchId, 
-             result: "win", 
-             winnerId: myUserId 
-          });
-      }
+      playSfx('game-over');
+      handleGameOver("win", myUserId, `Chiếu bí! ${turn === 'white' ? 'Trắng' : 'Đen'} giành chiến thắng!`);
     } else if (isCheck(newBoard, nextTurn)) {
       toast({ title: "Chiếu tướng!", description: `${nextTurn === 'white' ? 'Trắng' : 'Đen'} đang bị chiếu.` });
     }
@@ -307,7 +553,8 @@ const ChessGame = () => {
         socket.emit("make_move", { 
            roomId, 
            matchId,
-           moveData: { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } } 
+           moveData: { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } },
+           remainingTime: myRole === 'player1' ? player1Time : player2Time
         });
     }
 
@@ -323,7 +570,7 @@ const ChessGame = () => {
   // Xử lý Timeout (Hết giờ) - Đếm lùi
   // ------------------------------------------
   useEffect(() => {
-    if (!matchId || isGameOver) return;
+    if ((!matchId && !(mode === 'ai' && isAiGameStarted)) || isGameOver) return;
 
     const interval = setInterval(() => {
       if (turn === 'white') {
@@ -343,16 +590,35 @@ const ChessGame = () => {
   }, [matchId, isGameOver, turn]);
 
   const handleTimeout = (timeLeftRole) => {
-      setIsGameOver(true);
       const amIPlayer1 = myRole === "player1";
       const isLose = (timeLeftRole === "player1" && amIPlayer1) || (timeLeftRole === "player2" && !amIPlayer1);
+      handleGameOver(isLose ? "lose" : "win", isLose ? currentTurnUserId : myUserId, "Hết thời gian! Bạn đã " + (isLose ? "thua." : "thắng."));
+  };
+
+  const handleGameStart = () => {
+      setIsAiGameStarted(true);
+      setGameStartTime(Date.now());
+      toast({ title: "Bắt đầu!", description: "Trận đấu đã bắt đầu, mời bạn đi trước." });
+  };
+
+  const handleGameOver = (result, winnerId, message) => {
+      const duration = gameStartTime ? Math.floor((Date.now() - gameStartTime) / 1000) : 0;
       
-      setModalResult(isLose ? "lose" : "win");
-      setModalMessage("Hết thời gian! Bạn đã " + (isLose ? "thua." : "thắng."));
+      setIsGameOver(true);
+      setModalResult(result);
+      setModalMessage(message);
       setIsModalOpen(true);
 
-      if (roomId) {
-          socket.emit("game_over", { roomId, matchId, result: "timeout", winnerId: isLose ? currentTurnUserId : myUserId });
+      if (roomId && matchId) {
+          socket.emit("game_over", {
+              roomId,
+              matchId,
+              result,
+              winnerId,
+              duration,
+              p1Captures: whiteCaptures,
+              p2Captures: blackCaptures
+          });
       }
   };
 
@@ -371,6 +637,9 @@ const ChessGame = () => {
     setIsGameOver(false);
     setLastMove(null);
     setHintMove(null);
+    setWhiteCaptures(0);
+    setBlackCaptures(0);
+    setGameStartTime(null);
   };
 
   const handleGetHint = async () => {
@@ -403,12 +672,16 @@ const ChessGame = () => {
     
     if (window.confirm("Bạn chắc chắn muốn đầu hàng không?")) {
         if (roomId) {
-          socket.emit("resign", { roomId, matchId });
+          const duration = gameStartTime ? Math.floor((Date.now() - gameStartTime) / 1000) : 0;
+          socket.emit("resign", { 
+              roomId, 
+              matchId,
+              duration,
+              p1Captures: whiteCaptures,
+              p2Captures: blackCaptures
+          });
         } else {
-            setIsGameOver(true);
-            setModalResult("resign");
-            setModalMessage("Bạn đã đầu hàng!");
-            setIsModalOpen(true);
+            handleGameOver("resign", null, "Bạn đã đầu hàng!");
         }
     }
   };
@@ -422,21 +695,42 @@ const ChessGame = () => {
     });
   }
 
+  const handleStartGame = async () => {
+    if (playerCount >= 2) {
+      socket.emit("start_match", { roomId });
+    } else if (mode === 'ai') {
+      handleGameStart();
+    } else {
+      try {
+        await matchmakingService.joinQueue("chess");
+        setIsSearching(true);
+        sonnerToast.success("Đang tìm đối thủ...");
+      } catch (error) {
+        sonnerToast.error(error.response?.data?.message || "Lỗi ghép trận.");
+      }
+    }
+  };
+
+  const handleCancelSearch = async () => {
+    try {
+      await matchmakingService.cancelQueue();
+      setIsSearching(false);
+      sonnerToast.success("Đã hủy tìm trận.");
+    } catch (error) {
+      sonnerToast.error("Lỗi hủy tìm trận.");
+    }
+  };
+
   return (
     <>
-      <div className="h-full flex flex-col p-4">
-        {isGameOver && (
-          <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center shrink-0">
-            <h2 className="text-lg font-bold text-primary">Game Over</h2>
-            <p className="text-sm">The match has ended.</p>
-          </div>
-        )}
-        <div className="flex-1 flex flex-col gap-4 lg:flex-row min-h-0">
-          <div className="flex-1 flex flex-col gap-2 min-h-0">
+      <div className="h-full flex flex-col p-1 sm:p-2">
+        <div className="flex-1 flex flex-col gap-2 lg:flex-row min-h-0">
+          <div className="flex-1 flex flex-col gap-1 min-h-0">
             <div className="shrink-0">
               <PlayerInfoBar 
                 name={myRole === 'player1' ? player2Name : player1Name} 
-                rating={myRole === 'player1' ? 2030 : 2290} 
+                rating={myRole === 'player1' ? player2Stats.elo : player1Stats.elo} 
+                rank={myRole === 'player1' ? player2Stats.rank : player1Stats.rank}
                 timer={myRole === 'player1' ? formatTime(player2Time) : formatTime(player1Time)} 
               />
             </div>
@@ -454,136 +748,85 @@ const ChessGame = () => {
                 hintMove={hintMove}
                 flipped={myRole === 'player2'}
                 onSquareClick={handleSquareClick}
+                boardTheme={boardTheme}
+                pieceColor={pieceColor}
+                myRole={myRole}
               />
+              {isGameOver && (
+                <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 z-20 pointer-events-none px-4 sm:px-12 animate-in fade-in zoom-in-95 duration-500">
+                  <div className="overflow-hidden rounded-xl border border-white/20 bg-black/60 backdrop-blur-md shadow-2xl">
+                    <div className="flex items-center justify-center py-3 px-4 gap-4 relative">
+                      {/* Decorative elements - Fence style */}
+                      <div className="flex items-center gap-1.5 opacity-40">
+                        {[1,2,3].map(i => <div key={i} className="w-1 h-8 bg-white rounded-full" />)}
+                      </div>
+                      
+                      <div className="text-center relative z-10">
+                        <h2 className="text-lg font-black text-white uppercase tracking-[0.2em] leading-none mb-1 drop-shadow-md">Kết thúc</h2>
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]" />
+                          <p className="text-[10px] text-white/90 font-bold uppercase tracking-widest drop-shadow-sm">Trận đấu đã kết thúc.</p>
+                          <div className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]" />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 opacity-40">
+                        {[1,2,3].map(i => <div key={i} className="w-1 h-8 bg-white rounded-full" />)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="shrink-0">
               <PlayerInfoBar 
                 name={myRole === 'player1' ? player1Name : player2Name} 
-                rating={myRole === 'player1' ? 2290 : 2030} 
+                rating={myRole === 'player1' ? player1Stats.elo : player2Stats.elo} 
+                rank={myRole === 'player1' ? player1Stats.rank : player2Stats.rank}
                 timer={myRole === 'player1' ? formatTime(player1Time) : formatTime(player2Time)} 
               />
             </div>
           </div>
 
-          <div className="w-full lg:w-64 space-y-4">
-            {roomId && (
-               <Card className="bg-primary/5 border-primary/20">
-                 <CardContent className="p-3 text-center font-medium">
-                   {currentTurnUserId === myUserId ? (
-                     <span className="text-green-600 animate-pulse flex items-center justify-center gap-1">
-                       <span className="h-2 w-2 bg-green-600 rounded-full"></span> Lượt của bạn
-                     </span>
-                   ) : (
-                     <span className="text-muted-foreground">⏳ Chờ đối thủ...</span>
-                   )}
-                 </CardContent>
-               </Card>
-            )}
-
-            {roomId && myRole === 'player1' && !matchId && (
-              <Card className="border-primary/20 bg-primary/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold leading-none">Cài đặt Thời gian</CardTitle>
-                </CardHeader>
-                <CardContent className="p-3">
-                  <select 
-                    className="w-full p-2 border rounded-md text-sm bg-background/50 accent-primary"
-                    value={matchTimeLimit}
-                    onChange={(e) => {
-                       const m = parseInt(e.target.value);
-                       setMatchTimeLimit(m);
-                       setPlayer1Time(m * 60);
-                       setPlayer2Time(m * 60);
-                       socket.emit("set_time_limit", { roomId, minutes: m });
-                    }}
-                  >
-                    <option value={15}>15 Phút</option>
-                    <option value={30}>30 Phút</option>
-                    <option value={45}>45 Phút</option>
-                    <option value={60}>60 Phút</option>
-                  </select>
-                </CardContent>
-              </Card>
-            )}
-
-            {!isGameOver && (
-              <Card className="border-primary/20 bg-primary/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold leading-none flex items-center gap-2">
-                    <Zap className="h-3 w-3 text-amber-500" />
-                    Hỗ trợ AI
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-3 space-y-3">
-                  {mode === 'ai' && (
-                    <select 
-                      className="w-full p-2 border rounded-md text-sm bg-background/50 accent-primary"
-                      value={difficulty}
-                      onChange={(e) => setDifficulty(e.target.value)}
-                    >
-                      <option value="easy">Dễ</option>
-                      <option value="medium">Trung bình</option>
-                      <option value="hard">Khó</option>
-                    </select>
-                  )}
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full h-8 text-xs gap-2"
-                    onClick={handleGetHint}
-                    disabled={isHintLoading || (roomId && currentTurnUserId !== myUserId) || (mode === 'ai' && turn === 'black')}
-                  >
-                    {isHintLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-amber-500" />}
-                    Gợi ý nước đi
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {code && <GameRoomPanel code={code} roomId={roomId} />}
-
-            {roomId && (
-               <div className="flex-1 min-h-0">
-                  <ChatBox roomId={roomId} currentUserId={myUserId} />
-               </div>
-            )}
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Move History (Custom)</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-muted-foreground">
-                        <th className="px-4 py-2 text-left font-medium">#</th>
-                        <th className="px-4 py-2 text-left font-medium">White</th>
-                        <th className="px-4 py-2 text-left font-medium">Black</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {movePairs.map((pair, idx) => (
-                        <tr key={idx} className="border-b last:border-0 hover:bg-accent/50">
-                          <td className="px-4 py-1.5 text-muted-foreground">{pair.num}</td>
-                          <td className="px-4 py-1.5 font-medium">{pair.white}</td>
-                          <td className="px-4 py-1.5 font-medium">{pair.black}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-            <div className="flex flex-col gap-2">
-              <Button variant="outline" size="sm" className="w-full" onClick={resetGame}>New Game</Button>
-              <Button variant="outline" size="sm" className="w-full" onClick={handleOfferDraw}>Offer Draw</Button>
-              <Button variant="destructive" size="sm" className="w-full" onClick={handleResign}>Resign</Button>
-              <Button variant="secondary" size="sm" className="w-full" onClick={() => {
-                if (roomId) socket.emit("leave_room", { roomId });
-                setTimeout(() => navigate('/dashboard'), 300);
-              }}>Thoát phòng</Button>
-            </div>
+          <div className="w-full lg:w-80 min-h-0">
+            <UnifiedSidePanel 
+              gameType="chess"
+              history={history}
+              movePairs={movePairs}
+              currentTurnUserId={currentTurnUserId}
+              myUserId={myUserId}
+              myRole={myRole}
+              isGameOver={isGameOver}
+              matchId={matchId}
+              roomId={roomId}
+              code={code}
+              onResign={handleResign}
+              onOfferDraw={handleOfferDraw}
+              onReset={resetGame}
+              onGetHint={handleGetHint}
+              isHintLoading={isHintLoading}
+              difficulty={difficulty}
+              setDifficulty={setDifficulty}
+              mode={mode}
+              matchTimeLimit={matchTimeLimit}
+              setMatchTimeLimit={setMatchTimeLimit}
+              setPlayer1Time={setPlayer1Time}
+              setPlayer2Time={setPlayer2Time}
+              chatHistory={chatHistory}
+              onStartGame={handleStartGame}
+              isGameStarted={mode === 'ai' ? isAiGameStarted : !!matchId}
+              playerCount={playerCount}
+              // Giao diện & Âm thanh
+              boardTheme={boardTheme}
+              setBoardTheme={setBoardTheme}
+              isMusicEnabled={isMusicEnabled}
+              setIsMusicEnabled={setIsMusicEnabled}
+              isSfxEnabled={isSfxEnabled}
+              setIsSfxEnabled={setIsSfxEnabled}
+              pieceColor={pieceColor}
+              setPieceColor={setPieceColor}
+              playSfx={playSfx}
+            />
           </div>
         </div>
       </div>
@@ -593,8 +836,42 @@ const ChessGame = () => {
         result={modalResult} 
         winnerName={modalResult === "win" ? "Bạn" : "Đối thủ"} 
         message={modalMessage}
+        eloChange={eloResult?.eloChange}
+        newElo={eloResult?.newElo}
+        captures={myRole === 'player1' ? whiteCaptures : blackCaptures}
+        duration={gameStartTime ? Math.floor((Date.now() - gameStartTime) / 1000) : 0}
         onExit={() => navigate('/dashboard')}
       />
+
+      {/* Matchmaking Overlay */}
+      {isSearching && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-card p-8 rounded-2xl border border-border shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 space-y-6 text-center">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 rounded-full blur-2xl animate-pulse" />
+              <Loader2 className="h-16 w-16 text-primary animate-spin relative" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black tracking-tight text-amber-500 uppercase">Đang tìm đối thủ</h2>
+              <p className="text-muted-foreground text-sm">Vui lòng đợi trong giây lát...</p>
+            </div>
+
+            <div className="bg-muted px-4 py-2 rounded-full font-mono text-lg font-bold text-primary">
+              {Math.floor(searchTime / 60)}:{(searchTime % 60).toString().padStart(2, '0')}
+            </div>
+
+            <Button 
+              variant="destructive" 
+              className="w-full py-6 font-bold uppercase tracking-widest gap-2"
+              onClick={handleCancelSearch}
+            >
+              <X className="h-4 w-4" />
+              Hủy tìm trận
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   );
 };

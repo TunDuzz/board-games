@@ -31,7 +31,7 @@ const Friends = () => {
 
         // Lắng nghe sự kiện thay đổi trạng thái bạn bè
         socket.on("friend_status_changed", ({ userId, status }) => {
-            setFriends(prev => prev.map(friend => 
+            setFriends(prev => prev.map(friend =>
                 friend.user_id === userId ? { ...friend, status } : friend
             ));
         });
@@ -65,7 +65,7 @@ const Friends = () => {
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!searchQuery.trim() || searchQuery.trim().length < 2) return;
-        
+
         setSearching(true);
         try {
             const data = await friendService.searchUsers(searchQuery);
@@ -129,8 +129,11 @@ const Friends = () => {
     ];
 
     return (
-        <div className="mx-auto max-w-4xl space-y-6">
-            <h1 className="text-2xl font-bold tracking-tight">Quản lý Bạn bè</h1>
+        <div className="mx-auto max-w-5xl px-4 py-6 space-y-8">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">Quản lý bạn bè</h1>
+                <p className="text-muted-foreground mt-2">Kết nối và thi đấu cùng bạn bè của bạn.</p>
+            </div>
 
             {/* Custom Tabs */}
             <div className="flex border-b border-border">
@@ -138,11 +141,10 @@ const Friends = () => {
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`px-4 py-2 -mb-px text-sm font-medium transition-colors border-b-2 ${
-                            activeTab === tab.id 
-                            ? "border-primary text-foreground" 
-                            : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
+                        className={`px-4 py-2 -mb-px text-sm font-medium transition-colors border-b-2 ${activeTab === tab.id
+                                ? "border-primary text-foreground"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}
                     >
                         {tab.label}
                         {tab.id === "requests" && pendingRequests.length > 0 && (
@@ -175,9 +177,8 @@ const Friends = () => {
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 {/* Status Indicator */}
-                                                <span className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-background z-10 ${
-                                                    friend.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
-                                                }`} title={friend.status === 'online' ? 'Đang online' : 'Ngoại tuyến'} />
+                                                <span className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-background z-10 ${friend.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                                                    }`} title={friend.status === 'online' ? 'Đang online' : 'Ngoại tuyến'} />
                                             </div>
                                             <div>
                                                 <p className="font-semibold flex items-center gap-2">
@@ -189,9 +190,9 @@ const Friends = () => {
                                                 <p className="text-xs text-muted-foreground">@{friend.username}</p>
                                             </div>
                                         </div>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
                                             className="text-destructive hover:bg-destructive/10"
                                             onClick={() => handleRemoveFriend(friend.user_id)}
                                         >
@@ -344,7 +345,7 @@ const Friends = () => {
                                 )}
                                 {!searching && searchResults.length === 0 && searchQuery.trim().length > 1 && (
                                     <p className="text-center text-muted-foreground py-10">Không tìm thấy người dùng.</p>
-                                ) }
+                                )}
                             </div>
                         </div>
                     )}

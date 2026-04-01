@@ -1,5 +1,5 @@
 import { Home, User, History, Trophy, LogOut, Gamepad2, Loader2, Users } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -21,15 +21,15 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { title: "Home", url: "/dashboard", icon: Home },
-  { title: "Friends", url: "/friends", icon: Users },
-  { title: "Profile", url: "/profile", icon: User },
-  { title: "Match History", url: "/history", icon: History },
-  { title: "Rankings", url: "/rankings", icon: Trophy },
+  { title: "Trang chủ", url: "/dashboard", icon: Home },
+  { title: "Bạn bè", url: "/friends", icon: Users },
+  { title: "Lịch sử đấu", url: "/history", icon: History },
+  { title: "Xếp hạng", url: "/rankings", icon: Trophy },
 ];
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -109,18 +109,22 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t p-2 transition-all duration-300">
+      <SidebarFooter className="border-t p-2">
         {loading ? (
           <div className="flex items-center justify-center p-2 h-[52px] group-data-[state=collapsed]:h-[108px] transition-all duration-300">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : user ? (
-          <div className={cn(
-            "flex items-center gap-3 p-2 rounded-xl transition-all duration-300 border border-transparent hover:bg-accent cursor-pointer group/profile",
-            "group-data-[state=collapsed]:p-0 group-data-[state=collapsed]:flex-col group-data-[state=collapsed]:gap-4 group-data-[state=collapsed]:py-4"
-          )}>
-            <div className="relative shrink-0 transition-transform duration-300 group-hover/profile:scale-105">
-              <Avatar className="h-9 w-9 rounded-xl border border-border shadow-sm">
+          <div 
+            onClick={() => navigate("/profile")}
+            className={cn(
+              "flex items-center gap-3 p-2 rounded-full border border-transparent hover:bg-accent cursor-pointer group/profile",
+              location.pathname === "/profile" ? "bg-accent border-primary/20" : "",
+              "group-data-[state=collapsed]:p-0 group-data-[state=collapsed]:flex-col group-data-[state=collapsed]:gap-4 group-data-[state=collapsed]:py-4"
+            )}
+          >
+            <div className="relative shrink-0">
+              <Avatar className="h-9 w-9 rounded-full border border-border shadow-sm">
                 <AvatarFallback className="bg-primary text-primary-foreground font-black text-xs">
                   {(user.full_name || user.username).slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -128,26 +132,27 @@ export function AppSidebar() {
               <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background bg-emerald-500 shadow-sm" />
             </div>
 
-            <div className="flex flex-1 flex-col overflow-hidden group-data-[state=collapsed]:hidden animate-in fade-in slide-in-from-left-2 duration-300">
+            <div className="flex flex-1 flex-col overflow-hidden group-data-[state=collapsed]:hidden">
               <span className="truncate text-sm font-bold text-foreground font-outfit uppercase tracking-tight">
                 {user.full_name || user.username}
               </span>
               <span className="truncate text-[10px] text-muted-foreground font-bold uppercase tracking-widest opacity-60">
-                {user.role?.name || "Member"}
+                {user.role?.name || "Thành viên"}
               </span>
             </div>
 
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 authService.logout();
                 window.location.href = "/";
               }}
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/30",
-                "transition-all duration-300 hover:bg-destructive/10 hover:text-destructive shrink-0",
+                "hover:bg-destructive/10 hover:text-destructive shrink-0",
                 "group-data-[state=collapsed]:mt-1"
               )}
-              title="Logout"
+              title="Đăng xuất"
             >
               <LogOut className="h-4.5 w-4.5" />
             </button>

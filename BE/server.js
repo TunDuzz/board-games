@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -39,8 +40,8 @@ sequelize.authenticate()
   .then(() => console.log("DB Synced "))
   .catch(err => console.error("DB Error ", err));
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, "0.0.0.0", () => {
   console.log("Server running on port " + PORT);
   console.log("DB_NAME:", process.env.DB_NAME);
   console.log("DB_USER:", process.env.DB_USER);

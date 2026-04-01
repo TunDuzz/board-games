@@ -34,7 +34,7 @@ const register = async (req, res) => {
             email,
             password_hash,
             rank: "Bronze",
-            elo: 1000
+            elo: 0
         });
 
         res.status(201).json({

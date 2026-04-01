@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Text, Group, Image as KonvaImage } from 'react-konva';
 
 // Cờ Vua: Component render SVG chuẩn
-const ChessPieceImage = ({ type, color, size }) => {
+const ChessPieceImage = ({ type, color, size, pieceColorTheme }) => {
     const [image, setImage] = useState(null);
 
     useEffect(() => {
@@ -12,7 +12,22 @@ const ChessPieceImage = ({ type, color, size }) => {
         img.onerror = () => console.error("Failed to load image:", img.src);
     }, [type, color]);
 
-    return image ? <KonvaImage image={image} x={-size / 2} y={-size / 2} width={size} height={size} /> : null;
+    const filter = useMemo(() => {
+        if (pieceColorTheme === 'dark') return 'brightness(0.8) contrast(1.2) saturate(0.8)';
+        if (pieceColorTheme === 'light') return 'brightness(1.1) contrast(0.9)';
+        return '';
+    }, [pieceColorTheme]);
+
+    return image ? (
+        <Group filters={filter ? [] : [] /* Konva filters are complex, we use native Canvas context filter via custom image drawing or Opacity */}>
+            <KonvaImage 
+                image={image} 
+                x={-size / 2} y={-size / 2} 
+                width={size} height={size} 
+                opacity={pieceColorTheme === 'dark' ? 0.9 : 1}
+            />
+        </Group>
+    ) : null;
 };
 
 export const GameBoard = ({
@@ -20,11 +35,14 @@ export const GameBoard = ({
     boardState = [],
     selectedSquare = null,
     validMoves = [],
-    lastMove = null, // Thêm vết nước đi cuối
-    winningLine = [], // Thêm đường thắng
-    hintMove = null, // Thêm nước đi gợi ý
-    flipped = false, // Lật bàn cờ cho người chơi bên kia
-    onSquareClick
+    lastMove = null, 
+    winningLine = [], 
+    hintMove = null, 
+    flipped = false, 
+    boardTheme = 'classic',
+    pieceColor = 'auto', 
+    onSquareClick,
+    myRole = 'player1'
 }) => {
     const [containerSize, setContainerSize] = useState({ width: 800, height: 800 });
     const containerRef = React.useRef(null);
@@ -35,8 +53,8 @@ export const GameBoard = ({
                 const { clientWidth, clientHeight } = containerRef.current;
                 // Leave some room for margins/padding
                 setContainerSize({
-                    width: clientWidth - 40,
-                    height: clientHeight - 40
+                    width: Math.max(0, clientWidth - 5),
+                    height: Math.max(0, clientHeight - 5)
                 });
             }
         };
@@ -45,6 +63,24 @@ export const GameBoard = ({
         window.addEventListener('resize', updateSize);
         return () => window.removeEventListener('resize', updateSize);
     }, []);
+    
+    const getVisualColor = (systemColor, gameMode) => {
+        if (pieceColor === 'auto') return systemColor;
+        let isMine = false;
+        const role = myRole || 'player1'; // Default to player1 for local/AI games
+        
+        if (gameMode === 'chess') {
+            isMine = (role === 'player1' && systemColor === 'white') || (role === 'player2' && systemColor === 'black');
+            return isMine ? (pieceColor === 'light' ? 'white' : 'black') : (pieceColor === 'light' ? 'black' : 'white');
+        } else if (gameMode === 'xiangqi') {
+            isMine = (role === 'player1' && systemColor === 'red') || (role === 'player2' && systemColor === 'black');
+            return isMine ? (pieceColor === 'light' ? 'red' : 'black') : (pieceColor === 'light' ? 'black' : 'red');
+        } else if (gameMode === 'caro') {
+            isMine = (role === 'player1' && systemColor === 'black') || (role === 'player2' && systemColor === 'white');
+            return isMine ? (pieceColor === 'light' ? 'white' : 'black') : (pieceColor === 'light' ? 'black' : 'white');
+        }
+        return systemColor;
+    };
 
     // 1. Cấu hình kích thước và cơ chế lưới theo từng loại cờ
     const config = useMemo(() => {
@@ -52,28 +88,61 @@ export const GameBoard = ({
         const baseCols = gameType === 'xiangqi' ? 9 : (gameType === 'chess' ? 8 : 15);
 
         // Calculate adaptive cellSize
-        const paddingValue = gameType === 'chess' ? 0 : (gameType === 'caro' ? 30 : 35);
+        const paddingValue = gameType === 'chess' ? 0 : (gameType === 'caro' ? 15 : 20);
         const availableW = containerSize.width - paddingValue * 2;
         const availableH = containerSize.height - paddingValue * 2;
 
-        const cellW = availableW / (gameType === 'caro' || gameType === 'xiangqi' ? baseCols - 1 : baseCols);
-        const cellH = availableH / (gameType === 'caro' || gameType === 'xiangqi' ? baseRows - 1 : baseRows);
+        const cellW = Math.max(0, availableW / (gameType === 'caro' || gameType === 'xiangqi' ? baseCols - 1 : baseCols));
+        const cellH = Math.max(0, availableH / (gameType === 'caro' || gameType === 'xiangqi' ? baseRows - 1 : baseRows));
 
-        // We want a square cell, and we want it to fit in both directions
-        const calculatedCellSize = Math.floor(Math.min(cellW, cellH, gameType === 'caro' ? 45 : 80));
+        const calculatedCellSize = Math.max(1, Math.floor(Math.min(cellW, cellH, gameType === 'caro' ? 100 : 150)));
 
-        switch (gameType) {
-            case 'xiangqi':
-                return { rows: 10, cols: 9, isIntersectionBased: true, bg: '#D46231', cellSize: calculatedCellSize, padding: calculatedCellSize / 2 };
-            case 'chess':
-                return { rows: 8, cols: 8, isIntersectionBased: false, bg: '#333', cellSize: calculatedCellSize, padding: 0, light: '#ebecd0', dark: '#779556' };
-            case 'caro':
-            default:
-                return { rows: 15, cols: 15, isIntersectionBased: true, bg: '#E1C699', cellSize: calculatedCellSize, padding: calculatedCellSize * 0.6 };
+        // Default colors
+        let bg = '#E1C699';
+        let line = '#000';
+        let light = '#ebecd0';
+        let dark = '#779556';
+        let pColors = { p1: '#2563eb', p2: '#ef4444' }; // P1, P2
+
+        if (gameType === 'xiangqi') {
+            bg = '#f1e0c5'; line = '#a67c52';
+            if (boardTheme === 'wood') { bg = '#e1c699'; line = '#5d4037'; }
+            if (boardTheme === 'bamboo') { bg = '#d4d8c1'; line = '#5a7d51'; }
+            if (boardTheme === 'dark') { bg = '#1a1a1a'; line = '#444'; }
+            
+            pColors = { p1: '#D32F2F', p2: '#000000' };
+            if (pieceColor === 'light') pColors = { p1: '#D32F2F', p2: '#000000' };
+            else if (pieceColor === 'dark') pColors = { p1: '#1a1a1a', p2: '#D32F2F' }; 
+
+            return { rows: 10, cols: 9, isIntersectionBased: true, bg, line, cellSize: calculatedCellSize, padding: calculatedCellSize / 2, pColors };
         }
-    }, [gameType, containerSize]);
 
-    const { rows, cols, isIntersectionBased, bg, cellSize, padding, light, dark } = config;
+        if (gameType === 'chess') {
+            if (boardTheme === 'classic') { light = '#ebecd0'; dark = '#779556'; }
+            if (boardTheme === 'wood') { light = '#f0d9b5'; dark = '#b58863'; }
+            if (boardTheme === 'blue') { light = '#dee3e6'; dark = '#8ca2ad'; }
+            if (boardTheme === 'dark') { light = '#404040'; dark = '#262626'; }
+            
+            return { rows: 8, cols: 8, isIntersectionBased: false, bg: '#333', cellSize: calculatedCellSize, padding: 0, light, dark, pColors };
+        }
+
+        // Caro
+        bg = '#ffffff'; line = '#cbd5e1';
+        if (boardTheme === 'wood') { bg = '#e3c099'; line = '#8b5e3c'; }
+        if (boardTheme === 'dark') { bg = '#1e293b'; line = '#334155'; }
+        
+        if (pieceColor === 'light') {
+            pColors = myRole === 'player1' ? { p1: '#f8fafc', p2: '#1e293b' } : { p1: '#1e293b', p2: '#f8fafc' };
+        } else if (pieceColor === 'dark') {
+            pColors = myRole === 'player1' ? { p1: '#1e293b', p2: '#f8fafc' } : { p1: '#f8fafc', p2: '#1e293b' };
+        } else {
+            pColors = { p1: '#3b82f6', p2: '#ef4444' };
+        }
+
+        return { rows: 15, cols: 15, isIntersectionBased: true, bg, line, cellSize: calculatedCellSize, padding: calculatedCellSize * 0.5, pColors };
+    }, [gameType, containerSize, boardTheme, pieceColor, myRole]);
+
+    const { rows, cols, isIntersectionBased, bg, line, cellSize, padding, light, dark, pColors } = config;
 
     // Tính toán chiều rộng và chiều cao thực tế của vùng kẻ lưới
     const gridWidth = isIntersectionBased ? (cols - 1) * cellSize : cols * cellSize;
@@ -120,12 +189,12 @@ export const GameBoard = ({
         const lines = [];
         for (let c = 0; c < cols; c++) {
             lines.push(
-                <Line key={`v-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke="#000" strokeWidth={1} />
+                <Line key={`v-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke={line} strokeWidth={1} />
             );
         }
         for (let r = 0; r < rows; r++) {
             lines.push(
-                <Line key={`h-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke="#000" strokeWidth={1} />
+                <Line key={`h-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke={line} strokeWidth={1} />
             );
         }
         return lines;
@@ -136,22 +205,22 @@ export const GameBoard = ({
         const lines = [];
 
         for (let r = 0; r < rows; r++) {
-            lines.push(<Line key={`hx-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke="#000" strokeWidth={2} />);
+            lines.push(<Line key={`hx-${r}`} points={[0, r * cellSize, gridWidth, r * cellSize]} stroke={line} strokeWidth={2} />);
         }
 
         for (let c = 0; c < cols; c++) {
             if (c === 0 || c === cols - 1) {
-                lines.push(<Line key={`vx-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke="#000" strokeWidth={2} />);
+                lines.push(<Line key={`vx-${c}`} points={[c * cellSize, 0, c * cellSize, gridHeight]} stroke={line} strokeWidth={2} />);
             } else {
-                lines.push(<Line key={`vx-top-${c}`} points={[c * cellSize, 0, c * cellSize, 4 * cellSize]} stroke="#000" strokeWidth={2} />);
-                lines.push(<Line key={`vx-bot-${c}`} points={[c * cellSize, 5 * cellSize, c * cellSize, gridHeight]} stroke="#000" strokeWidth={2} />);
+                lines.push(<Line key={`vx-top-${c}`} points={[c * cellSize, 0, c * cellSize, 4 * cellSize]} stroke={line} strokeWidth={2} />);
+                lines.push(<Line key={`vx-bot-${c}`} points={[c * cellSize, 5 * cellSize, c * cellSize, gridHeight]} stroke={line} strokeWidth={2} />);
             }
         }
 
-        lines.push(<Line key="palace-top-1" points={[3 * cellSize, 0, 5 * cellSize, 2 * cellSize]} stroke="#000" strokeWidth={2} />);
-        lines.push(<Line key="palace-top-2" points={[5 * cellSize, 0, 3 * cellSize, 2 * cellSize]} stroke="#000" strokeWidth={2} />);
-        lines.push(<Line key="palace-bot-1" points={[3 * cellSize, 7 * cellSize, 5 * cellSize, 9 * cellSize]} stroke="#000" strokeWidth={2} />);
-        lines.push(<Line key="palace-bot-2" points={[5 * cellSize, 7 * cellSize, 3 * cellSize, 9 * cellSize]} stroke="#000" strokeWidth={2} />);
+        lines.push(<Line key="palace-top-1" points={[3 * cellSize, 0, 5 * cellSize, 2 * cellSize]} stroke={line} strokeWidth={2} />);
+        lines.push(<Line key="palace-top-2" points={[5 * cellSize, 0, 3 * cellSize, 2 * cellSize]} stroke={line} strokeWidth={2} />);
+        lines.push(<Line key="palace-bot-1" points={[3 * cellSize, 7 * cellSize, 5 * cellSize, 9 * cellSize]} stroke={line} strokeWidth={2} />);
+        lines.push(<Line key="palace-bot-2" points={[5 * cellSize, 7 * cellSize, 3 * cellSize, 9 * cellSize]} stroke={line} strokeWidth={2} />);
 
         const drawTick = (r, c) => {
             const x = c * cellSize;
@@ -232,10 +301,10 @@ export const GameBoard = ({
 
     const renderHint = () => {
         if (!hintMove) return null;
-        
+
         // Caro hint format is {row, col}, Chess/Xiangqi is {from: {row, col}, to: {row, col}}
         const isCaro = gameType === 'caro';
-        
+
         if (isCaro) {
             const renderC = flipped ? cols - 1 - hintMove.col : hintMove.col;
             const renderR = flipped ? rows - 1 - hintMove.row : hintMove.row;
@@ -315,12 +384,19 @@ export const GameBoard = ({
 
     const renderSinglePiece = (type, piece) => {
         if (type === 'caro') {
-            const isBlack = (piece === 'black' || piece?.color === 'black');
+            const systemColor = (piece === 'black' || piece?.color === 'black') ? 'black' : 'white';
+            const color = systemColor === 'black' ? pColors.p1 : pColors.p2;
+            let stroke = '#444';
+            
+            if (boardTheme === 'dark') {
+                stroke = systemColor === 'black' ? '#00aa00' : '#aa00aa';
+            }
+
             return (
                 <Circle
                     radius={cellSize * 0.4}
-                    fill={isBlack ? '#222' : '#f0f0f0'}
-                    stroke="#444"
+                    fill={color}
+                    stroke={stroke}
                     strokeWidth={1}
                     shadowColor="#000"
                     shadowBlur={4}
@@ -331,15 +407,28 @@ export const GameBoard = ({
         }
 
         if (type === 'xiangqi') {
-            const isRed = piece?.color === 'red';
-            const textColor = isRed ? '#D32F2F' : '#000000'; // Đỏ tươi và Đen tuyền
+            const systemColor = piece?.color === 'red' ? 'red' : 'black';
+            const visualColor = getVisualColor(systemColor, 'xiangqi');
+            const isRed = visualColor === 'red';
+
+            let textColor = isRed ? '#D32F2F' : '#1a1a1a';
+            let bgFill = 'navajowhite';
+            let strokeColor = textColor;
+
+            if (boardTheme === 'dark') {
+                bgFill = '#333333';
+            } else if (boardTheme === 'wood') {
+                bgFill = '#deb887';
+            } else if (boardTheme === 'paper') {
+                bgFill = '#fff9c4';
+            }
 
             return (
                 <Group>
                     <Circle
                         radius={cellSize * 0.45}
                         fill="white"
-                        stroke={textColor}
+                        stroke={strokeColor}
                         strokeWidth={2}
                         shadowColor="#000"
                         shadowBlur={3}
@@ -348,8 +437,8 @@ export const GameBoard = ({
                     />
                     <Circle
                         radius={cellSize * 0.38}
-                        fill="navajowhite"
-                        stroke={textColor}
+                        fill={bgFill}
+                        stroke={strokeColor}
                         strokeWidth={1.2}
                     />
                     <Text
@@ -370,7 +459,17 @@ export const GameBoard = ({
         }
 
         if (type === 'chess') {
-            return <ChessPieceImage type={piece?.type || 'p'} color={piece?.color === 'white' ? 'white' : 'black'} size={cellSize * 0.9} />;
+            const systemColor = piece?.color === 'white' ? 'white' : 'black';
+            const visualColor = getVisualColor(systemColor, 'chess');
+
+            return (
+                <ChessPieceImage 
+                    type={piece?.type || 'p'} 
+                    color={visualColor} 
+                    size={cellSize * 0.9} 
+                    pieceColorTheme={pieceColor}
+                />
+            );
         }
 
         return null;
@@ -424,28 +523,28 @@ export const GameBoard = ({
 
                     {/* Highlight nước đi cuối cùng (Last Move) */}
                     {lastMove && (
-                       <>
-                         {/* Điểm xuất phát (Chess/Xiangqi) */}
-                         {lastMove.from && (
-                             <Rect
-                                 x={(flipped ? cols - 1 - lastMove.from.col : lastMove.from.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 y={(flipped ? rows - 1 - lastMove.from.row : lastMove.from.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 width={cellSize}
-                                 height={cellSize}
-                                 fill="rgba(255, 235, 59, 0.3)"
-                             />
-                         )}
-                         {/* Điểm đến hoặc Tọa độ đơn (Caro) */}
-                         {(lastMove.to || lastMove.col !== undefined) && (
-                             <Rect
-                                 x={(flipped ? cols - 1 - (lastMove.to?.col ?? lastMove.col) : (lastMove.to?.col ?? lastMove.col)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 y={(flipped ? rows - 1 - (lastMove.to?.row ?? lastMove.row) : (lastMove.to?.row ?? lastMove.row)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
-                                 width={cellSize}
-                                 height={cellSize}
-                                 fill="rgba(255, 235, 59, 0.4)"
-                             />
-                         )}
-                       </>
+                        <>
+                            {/* Điểm xuất phát (Chess/Xiangqi) */}
+                            {lastMove.from && (
+                                <Rect
+                                    x={(flipped ? cols - 1 - lastMove.from.col : lastMove.from.col) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                    y={(flipped ? rows - 1 - lastMove.from.row : lastMove.from.row) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                    width={cellSize}
+                                    height={cellSize}
+                                    fill="rgba(255, 235, 59, 0.3)"
+                                />
+                            )}
+                            {/* Điểm đến hoặc Tọa độ đơn (Caro) */}
+                            {(lastMove.to || lastMove.col !== undefined) && (
+                                <Rect
+                                    x={(flipped ? cols - 1 - (lastMove.to?.col ?? lastMove.col) : (lastMove.to?.col ?? lastMove.col)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                    y={(flipped ? rows - 1 - (lastMove.to?.row ?? lastMove.row) : (lastMove.to?.row ?? lastMove.row)) * cellSize - (isIntersectionBased ? cellSize / 2 : 0)}
+                                    width={cellSize}
+                                    height={cellSize}
+                                    fill="rgba(255, 235, 59, 0.4)"
+                                />
+                            )}
+                        </>
                     )}
                 </Layer>
 

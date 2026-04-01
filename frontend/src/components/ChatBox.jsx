@@ -3,13 +3,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { socket } from "@/lib/socket";
-import { Send, MessageSquare, Smile, Zap } from "lucide-react";
+import { Send, MessageSquare, Smile, Zap, Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
-const ChatBox = ({ roomId, currentUserId }) => {
-    const [messages, setMessages] = useState([]);
+const ChatBox = ({ roomId, currentUserId, minimal = false, initialMessages = [] }) => {
+    const [messages, setMessages] = useState(initialMessages);
     const [inputText, setInputText] = useState("");
     const [showQuickMenu, setShowQuickMenu] = useState(false);
     const scrollRef = useRef(null);
+
+    // Đồng bộ lại tin nhắn khi tin nhắn ban đầu thay đổi (ví dụ khi join phòng)
+    useEffect(() => {
+        if (initialMessages && initialMessages.length > 0) {
+            setMessages(initialMessages);
+        }
+    }, [initialMessages]);
 
     const quickEmojis = ["😂", "😍", "🤔", "😮", "😢", "😡", "👍", "👋", "🔥", "🎉"];
     const quickPhrases = [
@@ -60,25 +69,61 @@ const ChatBox = ({ roomId, currentUserId }) => {
         setShowQuickMenu(false);
     };
 
-    return (
-        <Card className="flex flex-col h-full border-primary/20 bg-primary/5 relative">
-            <CardHeader className="py-2 px-3 border-b border-primary/10 flex flex-row items-center justify-between">
-                <CardTitle className="text-xs font-bold flex items-center gap-2">
-                    <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                    Trò chuyện
-                </CardTitle>
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6"
-                    onClick={() => setShowQuickMenu(!showQuickMenu)}
-                >
-                    <Smile className={`h-4 w-4 ${showQuickMenu ? 'text-primary' : 'text-muted-foreground'}`} />
-                </Button>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-0 min-h-0 relative">
+    const content = (
+        <div className="flex-1 flex flex-col p-0 min-h-0 relative h-full overflow-hidden">
+            <ScrollArea 
+                className="flex-1 p-3"
+                viewportRef={scrollRef}
+            >
+                <div className="space-y-2 pr-2">
+                    {messages.length === 0 && (
+                        <p className="text-[10px] text-center text-muted-foreground italic py-4">
+                            Chưa có tin nhắn nào. Gửi lời chào đối thủ đi!
+                        </p>
+                    )}
+                    {messages.map((msg, idx) => {
+                        const isMe = msg.userId === currentUserId;
+                        return (
+                            <div 
+                                key={idx} 
+                                className={`flex gap-2 items-start ${isMe ? "justify-end" : "justify-start"}`}
+                            >
+                                {!isMe && (
+                                    <Avatar className="h-7 w-7 border-border/50 border mt-0.5 shrink-0">
+                                        <AvatarImage src={msg.avatar || "/default-avatar.png"} alt={msg.username} />
+                                        <AvatarFallback className="text-[10px] bg-primary/20 text-primary uppercase font-bold">
+                                            {msg.username?.substring(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                )}
+
+                                <div className={`flex flex-col ${isMe ? "items-end" : "items-start gap-0.5"}`}>
+                                    {!isMe && (
+                                        <span className="text-[9px] text-muted-foreground px-1 uppercase font-black tracking-tighter opacity-80">
+                                            {msg.username}
+                                        </span>
+                                    )}
+                                    <div 
+                                        className={`max-w-[100%] px-3 py-1.5 rounded-2xl text-[12px] break-words shadow-sm leading-tight ${
+                                            isMe 
+                                            ? "bg-primary text-primary-foreground rounded-tr-none" 
+                                            : "bg-muted text-foreground border border-border/50 rounded-tl-none"
+                                        }`}
+                                    >
+                                        {msg.text}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </ScrollArea>
+            <form 
+                onSubmit={handleSendMessage} 
+                className="p-2 border-t border-border flex gap-1.5 bg-muted/30 items-center relative"
+            >
                 {showQuickMenu && (
-                    <div className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-card border border-primary/20 rounded-xl shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="absolute bottom-[calc(100%+8px)] left-2 right-2 p-3 bg-card border border-border rounded-xl shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2">
                         <div className="space-y-3">
                             <div>
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
@@ -88,6 +133,7 @@ const ChatBox = ({ roomId, currentUserId }) => {
                                     {quickEmojis.map(emoji => (
                                         <button 
                                             key={emoji}
+                                            type="button"
                                             onClick={() => sendQuickMessage(emoji)}
                                             className="text-xl hover:scale-125 transition-transform duration-100 p-1"
                                         >
@@ -96,7 +142,7 @@ const ChatBox = ({ roomId, currentUserId }) => {
                                     ))}
                                 </div>
                             </div>
-                            <div className="pt-2 border-t border-primary/5">
+                            <div className="pt-2 border-t border-border">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
                                     <Zap className="h-3 w-3" /> Tin nhắn nhanh
                                 </p>
@@ -104,6 +150,7 @@ const ChatBox = ({ roomId, currentUserId }) => {
                                     {quickPhrases.map(phrase => (
                                         <button 
                                             key={phrase}
+                                            type="button"
                                             onClick={() => sendQuickMessage(phrase)}
                                             className="text-[10px] bg-primary/10 hover:bg-primary/20 text-primary px-2 py-1 rounded-full transition-colors"
                                         >
@@ -115,53 +162,41 @@ const ChatBox = ({ roomId, currentUserId }) => {
                         </div>
                     </div>
                 )}
-                <div 
-                    ref={scrollRef}
-                    className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-primary/20"
+                <Button 
+                    type="button"
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-7 w-7 text-muted-foreground hover:text-primary shrink-0"
+                    onClick={() => setShowQuickMenu(!showQuickMenu)}
                 >
-                    {messages.length === 0 && (
-                        <p className="text-[10px] text-center text-muted-foreground italic py-4">
-                            Chưa có tin nhắn nào. Gửi lời chào đối thủ đi!
-                        </p>
-                    )}
-                    {messages.map((msg, idx) => {
-                        const isMe = msg.userId === currentUserId;
-                        return (
-                            <div 
-                                key={idx} 
-                                className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
-                            >
-                                <span className="text-[9px] text-muted-foreground mb-0.5 px-1">
-                                    {isMe ? "Bạn" : msg.username}
-                                </span>
-                                <div 
-                                    className={`max-w-[85%] px-2.5 py-1.5 rounded-2xl text-xs break-words ${
-                                        isMe 
-                                        ? "bg-primary text-primary-foreground rounded-tr-none" 
-                                        : "bg-background border border-primary/10 rounded-tl-none"
-                                    }`}
-                                >
-                                    {msg.text}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                <form 
-                    onSubmit={handleSendMessage} 
-                    className="p-2 border-t border-primary/10 flex gap-1.5"
-                >
-                    <Input 
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        placeholder="Nhập tin nhắn..."
-                        className="h-8 text-xs bg-background/50"
-                    />
-                    <Button type="submit" size="icon" className="h-8 w-8 shrink-0">
-                        <Send className="h-3.5 w-3.5" />
-                    </Button>
-                </form>
-            </CardContent>
+                    <Smile className={`h-4 w-4 ${showQuickMenu ? 'text-primary' : ''}`} />
+                </Button>
+                <Input 
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Nhập tin nhắn..."
+                    className="h-8 text-xs bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary flex-1"
+                />
+                <Button type="submit" size="sm" className="h-8 px-3 shrink-0">
+                    <Send className="h-3.5 w-3.5" />
+                </Button>
+            </form>
+        </div>
+    );
+
+    if (minimal) return content;
+
+    return (
+        <Card className="flex flex-col h-full border-border bg-card shadow-lg relative">
+            <CardHeader className="py-2 px-3 border-b border-border flex flex-row items-center justify-between">
+                <CardTitle className="text-xs font-bold flex items-center gap-2 text-primary uppercase tracking-widest">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Trò chuyện
+                </CardTitle>
+            </CardHeader>
+            <div className="flex-1 flex flex-col p-0 min-h-0 relative bg-background">
+                {content}
+            </div>
         </Card>
     );
 };

@@ -54,7 +54,7 @@ module.exports = (io) => {
             socket.user = {
                 id: user.user_id,
                 username: user.username,
-                elo: 1000 
+                elo: user.UserStat ? user.UserStat.elo : 0 
             };
 
             next();

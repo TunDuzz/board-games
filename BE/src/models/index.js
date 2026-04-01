@@ -21,6 +21,7 @@ User.hasOne(UserSettings, { foreignKey: "user_id" });
 User.hasMany(UserGameStats, { as: "gameStats", foreignKey: "user_id" });
 UserGameStats.belongsTo(User, { as: "user", foreignKey: "user_id" });
 
+
 User.belongsToMany(GameType, { through: UserGameStats, foreignKey: "user_id", as: 'userGameTypes' });
 GameType.belongsToMany(User, { through: UserGameStats, foreignKey: "game_type_id", as: 'typeUsers' });
 

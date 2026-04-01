@@ -6,8 +6,8 @@ export const roomService = {
         return response.data;
     },
 
-    async joinRoom(roomIdOrCode, password = null) {
-        const response = await http.post('/rooms/join', { roomIdOrCode, password });
+    async joinRoom(roomIdOrCode, password = null, gameTypeName = null) {
+        const response = await http.post('/rooms/join', { roomIdOrCode, password, gameTypeName });
         return response.data;
     },
 

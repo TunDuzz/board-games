@@ -7,7 +7,7 @@ import { GameBoard } from "@/components/GameBoard";
 import { userService } from "@/services/user.service";
 import { INITIAL_CHESS_BOARD, getPieceColor as getChessPieceColor } from "@/utils/chessLogic";
 import { BOARD_SIZE as CARO_BOARD_SIZE, getWinningLine, checkWin } from "@/utils/caroLogic";
-import { ChevronLeft, ChevronRight, RotateCcw, Play, Pause, Home, Trophy, Calendar, User, Hash } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw, Play, Pause, Home, Trophy, Calendar, User, Hash, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const ReplayGame = () => {
@@ -208,7 +208,7 @@ const ReplayGame = () => {
                                             strokeWidth="4"
                                             fill="transparent"
                                             strokeDasharray={2 * Math.PI * 44}
-                                            strokeDashoffset={2 * Math.PI * 44 * (1 - (currentIndex + 1) / moves.length)}
+                                            strokeDashoffset={moves.length > 0 ? 2 * Math.PI * 44 * (1 - (currentIndex + 1) / moves.length) : 2 * Math.PI * 44}
                                             className="text-primary transition-all duration-300 ease-in-out"
                                         />
                                     </svg>
