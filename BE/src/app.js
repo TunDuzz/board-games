@@ -27,6 +27,7 @@ app.use("/api/rooms", require("./routes/room.routes"));
 app.use("/api/matchmaking", require("./routes/matchmaking.routes"));
 app.use("/api/ai", require("./routes/ai.routes"));
 app.use("/api/feedback", require("./routes/feedback.routes"));
+app.use("/api/admin", require("./routes/admin.routes"));
 
 
 // Test route

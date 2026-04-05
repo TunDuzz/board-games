@@ -31,4 +31,13 @@ const optionalAuth = (req, res, next) => {
     }
 };
 
-module.exports = {verifyToken, optionalAuth};
+// Chỉ cho phép admin truy cập (phải dùng sau verifyToken)
+const requireAdmin = (req, res, next) => {
+    if (!req.user || req.user.role !== "admin") {
+        return res.status(403).json({ message: "Bạn không có quyền truy cập tính năng này!" });
+    }
+    next();
+};
+
+module.exports = {verifyToken, optionalAuth, requireAdmin};
+
