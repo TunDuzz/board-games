@@ -12,6 +12,8 @@ const User = sequelize.define(
     birth_year: DataTypes.INTEGER,
     avatar_url: { type: DataTypes.STRING(255), defaultValue: "/default-avatar.png" },
     is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+    role: { type: DataTypes.ENUM("user", "admin"), defaultValue: "user", allowNull: false },
+    is_banned: { type: DataTypes.BOOLEAN, defaultValue: false },
   },
   {
     tableName: "users",

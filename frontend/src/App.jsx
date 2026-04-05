@@ -14,9 +14,10 @@ import Profile from "./pages/user/Profile";
 import MatchHistory from "./pages/user/MatchHistory";
 import Rankings from "./pages/user/Rankings";
 import Friends from "./pages/user/Friends";
-import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
 import { AppLayout } from "./components/AppLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 import { GameThemeProvider } from "@/hooks/useGameTheme.jsx";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
               <Route path="/profile" element={<Profile />} />
               <Route path="/history" element={<MatchHistory />} />
               <Route path="/rankings" element={<Rankings />} />
+              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
             </Route>
 
           </Routes>

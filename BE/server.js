@@ -21,6 +21,7 @@ const io = new Server(server, {
 
 // Import socket setup logic
 const setupSocket = require("./src/socket");
+const seedAdmin = require("./src/scripts/seed"); // Import script khởi tạo Admin
 const { onlineUsers, inGameUsers } = setupSocket(io);
 
 // Chia sẻ io instance để dùng trong controllers
@@ -35,9 +36,13 @@ app.get("/", (req, res) => {
 sequelize.authenticate()
   .then(() => {
     console.log("DB Connected ");
-    return sequelize.sync();
+    return sequelize.sync({ alter: true });
   })
-  .then(() => console.log("DB Synced "))
+  .then(async () => {
+    console.log("DB Synced ");
+    // Khởi tạo tài khoản Admin mặc định
+    await seedAdmin();
+  })
   .catch(err => console.error("DB Error ", err));
 
 const PORT = process.env.PORT || 3001;
