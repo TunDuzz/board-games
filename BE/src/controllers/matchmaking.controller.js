@@ -17,6 +17,9 @@ exports.joinQueue = async ({ userId, gameTypeName }) => {
         throw err;
     }
 
+
+
+    
     const gameType = await GameType.findOne({ where: { name: gameTypeName } });
     if (!gameType) {
         const err = new Error("Loại game không hợp lệ");
