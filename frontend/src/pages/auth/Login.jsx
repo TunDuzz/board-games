@@ -27,9 +27,14 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await authService.login(formData.email, formData.password);
+      const response = await authService.login(formData.email, formData.password);
       toast({ title: "Đăng nhập thành công!", description: "Chào mừng quay trở lại." });
-      navigate("/dashboard");
+      
+      if (response.user.role === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/dashboard");
+      }
     } catch (error) {
       console.error("Login error:", error);
       const message = error.response?.data?.message || "Đã có lỗi xảy ra. Vui lòng thử lại.";

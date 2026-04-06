@@ -1,4 +1,4 @@
-import { Home, User, History, Trophy, LogOut, Gamepad2, Loader2, Users, MessageSquare, Sun, Moon } from "lucide-react";
+import { Home, User, History, Trophy, LogOut, Gamepad2, Loader2, Users, MessageSquare, Sun, Moon, ShieldCheck } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -51,6 +51,8 @@ export function AppSidebar() {
     fetchUser();
   }, []);
 
+  const isAdmin = user?.role === "admin";
+
   return (
     <Sidebar collapsible="icon" className="border-r bg-background transition-all duration-300 ease-in-out">
       <SidebarHeader className="h-16 border-b p-0 flex items-center justify-center bg-transparent">
@@ -60,7 +62,7 @@ export function AppSidebar() {
               <Gamepad2 className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-base font-bold tracking-tight text-foreground font-outfit uppercase truncate">
-              Board Game
+              {isAdmin ? "Admin Panel" : "Board Game"}
             </span>
           </div>
           <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-accent transition-all duration-300 group-data-[state=collapsed]:h-10 group-data-[state=collapsed]:w-10" />
@@ -70,8 +72,9 @@ export function AppSidebar() {
       <SidebarContent className="py-3 transition-all duration-300">
         <SidebarGroup className="p-0">
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2 px-2 transition-all duration-300">
-              {navItems.map((item) => {
+            <SidebarMenu className="gap-2 px-2 transition-all">
+              {/* CHỈ HIỂN THỊ NẾU LÀ USER THƯỜNG */}
+              {!isAdmin && navItems.map((item) => {
                 const isActive = location.pathname === item.url;
                 return (
                   <SidebarMenuItem key={item.title}>
@@ -109,25 +112,57 @@ export function AppSidebar() {
                 );
               })}
 
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => setIsFeedbackOpen(true)}
-                  size="lg"
-                  tooltip="Góp ý"
-                  className={cn(
-                    "relative h-12 w-full justify-start gap-4 rounded-xl px-3 transition-all duration-300 ease-in-out font-outfit",
-                    "text-muted-foreground hover:bg-accent/80 hover:text-foreground",
-                    "group overflow-hidden"
-                  )}
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105 bg-transparent text-muted-foreground group-hover:text-foreground">
-                    <MessageSquare className="h-5 w-5" />
-                  </div>
-                  <span className="text-sm font-semibold tracking-tight transition-all duration-300 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:w-0 ml-1">
-                    Feedback
-                  </span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {!isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setIsFeedbackOpen(true)}
+                    size="lg"
+                    tooltip="Góp ý"
+                    className={cn(
+                      "relative h-12 w-full justify-start gap-4 rounded-xl px-3 transition-all duration-300 ease-in-out font-outfit",
+                      "text-muted-foreground hover:bg-accent/80 hover:text-foreground",
+                      "group overflow-hidden"
+                    )}
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105 bg-transparent text-muted-foreground group-hover:text-foreground">
+                      <MessageSquare className="h-5 w-5" />
+                    </div>
+                    <span className="text-sm font-semibold tracking-tight transition-all duration-300 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:w-0 ml-1">
+                      Feedback
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* TÙY CHỌN DÀNH RIÊNG CHO ADMIN */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    size="lg"
+                    tooltip="Quản trị"
+                    isActive={location.pathname === "/admin"}
+                    className={cn(
+                      "relative h-12 w-full justify-start gap-4 rounded-xl px-3 transition-all duration-300 ease-in-out font-outfit",
+                      "text-muted-foreground hover:bg-accent/80 hover:text-foreground",
+                      "data-[active=true]:bg-indigo-600/10 data-[active=true]:text-indigo-400 data-[active=true]:font-bold",
+                      "group overflow-hidden"
+                    )}
+                  >
+                    <NavLink to="/admin" className="flex items-center w-full">
+                      <div className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105",
+                        location.pathname === "/admin" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30" : "bg-transparent text-muted-foreground group-hover:text-foreground"
+                      )}>
+                        <ShieldCheck className="h-5 w-5" />
+                      </div>
+                      <span className="text-sm font-semibold tracking-tight transition-all duration-300 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:w-0 ml-1">
+                        Quản trị hệ thống
+                      </span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -163,7 +198,7 @@ export function AppSidebar() {
                 {user.full_name || user.username}
               </span>
               <span className="truncate text-[10px] text-muted-foreground font-bold uppercase tracking-widest opacity-60">
-                {user.role?.name || "Thành viên"}
+                {user.role === "admin" ? "Quản trị viên" : "Thành viên"}
               </span>
             </div>
 

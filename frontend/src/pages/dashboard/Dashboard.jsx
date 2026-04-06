@@ -101,6 +101,12 @@ const Dashboard = () => {
           userService.getMatchHistory(),
           friendService.getFriends()
         ]);
+
+        if (profileData.role === "admin") {
+          navigate("/admin", { replace: true });
+          return;
+        }
+
         setUser(profileData);
         setMatches(historyData);
         setFriends(friendsData.friends || []);
