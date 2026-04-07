@@ -109,13 +109,66 @@ const Profile = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
+    if (!file) return;
+
+    // Kiểm tra định dạng
+    if (!file.type.startsWith("image/")) {
       toast({
-        title: "Thông báo",
-        description: "Tính năng tải ảnh lên đang được phát triển. Vui lòng thử lại sau.",
+        variant: "destructive",
+        title: "Lỗi định dạng",
+        description: "Vui lòng chọn tệp hình ảnh (.jpg, .png, .gif)",
       });
+      return;
+    }
+
+    // Kiểm tra dung lượng (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        variant: "destructive",
+        title: "Tệp quá lớn",
+        description: "Dung lượng ảnh tối đa là 5MB.",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("avatar", file);
+
+    setUpdating(true);
+    try {
+      const result = await userService.uploadAvatar(file);
+      
+      // Axios trả về dữ liệu trực tiếp từ response.data (vì trong userService đã return response.data)
+      const newAvatarUrl = result.avatarUrl;
+      
+      // Cập nhật state local
+      setUser(prev => ({ ...prev, avatar_url: newAvatarUrl }));
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật ảnh đại diện mới.",
+      });
+
+      // Lưu lại thông tin user vào localStorage nếu dự án có lưu
+      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+      if (storedUser) {
+        storedUser.avatar_url = newAvatarUrl;
+        localStorage.setItem('user', JSON.stringify(storedUser));
+      }
+
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi tải ảnh",
+        description: error.response?.data?.message || "Không thể tải ảnh lên server.",
+      });
+    } finally {
+      setUpdating(false);
+      // Reset input file để có thể chọn lại cùng 1 file nếu cần
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
