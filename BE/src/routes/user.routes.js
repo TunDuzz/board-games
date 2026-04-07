@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { getProfile, updateProfile, getMatchHistory, getRankings, changePassword, getMatchMoves } = require("../controllers/user.controller");
+const { getProfile, updateProfile, getMatchHistory, getRankings, changePassword, getMatchMoves, uploadAvatar } = require("../controllers/user.controller");
 const { verifyToken } = require("../middleware/auth.middleware");
+const upload = require("../middleware/upload.middleware");
 
 // Tất cả các route này đều cần đăng nhập
 router.use(verifyToken);
@@ -25,6 +26,17 @@ router.put("/profile", async (req, res) => {
         return res.json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({ message: error.message || "Lỗi server!" });
+    }
+});
+
+// POST /api/user/upload-avatar
+router.post("/upload-avatar", upload.single("avatar"), async (req, res) => {
+    try {
+        const result = await uploadAvatar({ userId: req.user.id, file: req.file });
+        return res.json(result);
+    } catch (error) {
+        console.error("[Upload Avatar Error]:", error);
+        return res.status(error.statusCode || 500).json({ message: error.message || "Lỗi tải ảnh!" });
     }
 });
 

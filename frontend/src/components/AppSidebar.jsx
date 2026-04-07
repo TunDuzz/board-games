@@ -14,7 +14,7 @@ import {
   SidebarHeader,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { userService } from "@/services/user.service";
 import { authService } from "@/services/auth.service";
 import { useState, useEffect } from "react";
@@ -179,13 +179,14 @@ export function AppSidebar() {
           <div 
             onClick={() => navigate("/profile")}
             className={cn(
-              "flex items-center gap-3 p-2 rounded-full border border-transparent hover:bg-accent cursor-pointer group/profile",
+              "flex items-center gap-3 p-2 rounded-xl border border-transparent hover:bg-accent cursor-pointer group/profile",
               location.pathname === "/profile" ? "bg-accent border-primary/20" : "",
-              "group-data-[state=collapsed]:p-0 group-data-[state=collapsed]:flex-col group-data-[state=collapsed]:gap-4 group-data-[state=collapsed]:py-4"
+              "group-data-[state=collapsed]:p-0 group-data-[state=collapsed]:flex-col group-data-[state=collapsed]:items-center group-data-[state=collapsed]:gap-4 group-data-[state=collapsed]:py-4"
             )}
           >
-            <div className="relative shrink-0">
+            <div className="relative shrink-0 flex items-center justify-center">
               <Avatar className="h-9 w-9 rounded-full border border-border shadow-sm">
+                <AvatarImage src={user.avatar_url} />
                 <AvatarFallback className="bg-primary text-primary-foreground font-black text-xs">
                   {(user.full_name || user.username).slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -202,36 +203,38 @@ export function AppSidebar() {
               </span>
             </div>
 
-            <div className="flex items-center gap-1 group-data-[state=collapsed]:hidden">
+            <div className="flex items-center gap-1 group-data-[state=collapsed]:flex-col group-data-[state=collapsed]:items-center group-data-[state=collapsed]:gap-3">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleTheme();
                 }}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/30",
-                  "transition-all duration-300 hover:bg-primary/10 hover:text-primary shrink-0"
+                  "flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground/40",
+                  "transition-all duration-300 hover:bg-primary/10 hover:text-primary shrink-0",
+                  "group-hover/profile:text-muted-foreground"
                 )}
                 title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
               >
                 {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
               </button>
 
-            <button
-              onClick={() => {
-                authService.logout();
-                window.location.href = "/";
-              }}
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/30",
-                "transition-all duration-300 hover:bg-destructive/10 hover:text-destructive shrink-0",
-                "group-data-[state=collapsed]:mt-1"
-              )}
-              title="Logout"
-            >
-              <LogOut className="h-4.5 w-4.5" />
-            </button>
-          </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  authService.logout();
+                  window.location.href = "/";
+                }}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground/40",
+                  "transition-all duration-300 hover:bg-destructive/10 hover:text-destructive shrink-0",
+                  "group-hover/profile:text-muted-foreground"
+                )}
+                title="Logout"
+              >
+                <LogOut className="h-4.5 w-4.5" />
+              </button>
+            </div>
           </div>
         ) : null}
       </SidebarFooter>

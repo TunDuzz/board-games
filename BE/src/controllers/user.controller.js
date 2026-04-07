@@ -199,4 +199,42 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
     return { message: "Đổi mật khẩu thành công!" };
 };
 
-module.exports = { getProfile, updateProfile, getMatchHistory, getRankings, changePassword, getMatchMoves };
+const uploadAvatar = async ({ userId, file }) => {
+    if (!file) {
+        const err = new Error("Vui lòng chọn ảnh!");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+        const err = new Error("Không tìm thấy người dùng!");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    // Lưu path tương đối vào DB
+    const avatarUrl = `/uploads/avatars/${file.filename}`;
+    user.avatar_url = avatarUrl;
+    await user.save();
+
+    return { 
+        message: "Tải ảnh lên thành công!", 
+        avatarUrl,
+        user: {
+            user_id: user.user_id,
+            username: user.username,
+            avatar_url: user.avatar_url
+        }
+    };
+};
+
+module.exports = { 
+    getProfile, 
+    updateProfile, 
+    getMatchHistory, 
+    getRankings, 
+    changePassword, 
+    getMatchMoves,
+    uploadAvatar 
+};

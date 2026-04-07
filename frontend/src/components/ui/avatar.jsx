@@ -12,9 +12,20 @@ const Avatar = React.forwardRef(({ className, ...props }, ref) => (
 ));
 Avatar.displayName = AvatarPrimitive.Root.displayName;
 
-const AvatarImage = React.forwardRef(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image ref={ref} className={cn("aspect-square h-full w-full", className)} {...props} />
-));
+const AvatarImage = React.forwardRef(({ className, src, ...props }, ref) => {
+  const fullSrc = src && !src.startsWith("http") && src.startsWith("/") 
+    ? `${import.meta.env.VITE_API_URL}${src}` 
+    : src;
+    
+  return (
+    <AvatarPrimitive.Image
+      ref={ref}
+      src={fullSrc}
+      className={cn("aspect-square h-full w-full object-cover", className)}
+      {...props}
+    />
+  );
+});
 AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
 const AvatarFallback = React.forwardRef(({ className, ...props }, ref) => (
